@@ -187,11 +187,31 @@ func (s *Server) handleCommitTurn(w http.ResponseWriter, r *http.Request) {
 		_ = session.Engine.CommitTurn(houseRole, houseStance, houseBanter, 0)
 	}
 
-	session.SequenceID++
-	session.LastActive = time.Now().UTC()
+	roundResolved := session.Engine.IsRoundResolved()
+	if roundResolved || session.Engine.Status == parley.StatusCompleted {
+		session.SequenceID++
+		session.LastActive = time.Now().UTC()
+		select {
+		case session.TurnReady <- struct{}{}:
+		default:
+		}
+	}
+	isPeerMatch := session.HouseBot == nil && !roundResolved && session.Engine.Status != parley.StatusCompleted
 	session.Mu.Unlock()
 
+	// If peer match and waiting for opponent move, hold briefly
+	if isPeerMatch {
+		select {
+		case <-session.TurnReady:
+		case <-time.After(500 * time.Millisecond):
+		case <-r.Context().Done():
+			return
+		}
+	}
+
+	session.Mu.Lock()
 	resp := s.buildEnvelope(session, bot.ID)
+	session.Mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(resp)

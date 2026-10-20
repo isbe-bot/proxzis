@@ -259,3 +259,8 @@ func (m *Match) Settle() (Settlement, Settlement, error) {
 
 	return p1Settle, p2Settle, nil
 }
+
+// IsRoundResolved returns true if the current round has been evaluated and both commitments were resolved.
+func (m *Match) IsRoundResolved() bool {
+	return !m.p1Committed && !m.p2Committed
+}
