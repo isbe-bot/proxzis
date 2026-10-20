@@ -1,6 +1,7 @@
 package glicko2
 
 import (
+	"errors"
 	"math"
 )
 
@@ -56,12 +57,73 @@ func E(mu, muJ, phiJ float64) float64 {
 	return 1.0 / (1.0 + math.Exp(-g(phiJ)*(mu-muJ)))
 }
 
-// Update computes the new Rating for a player given their match results in a rating period.
-// Follows Glickman's paper: "Example of the Glicko-2 system".
+// Numerical guardrails are deliberately wider than normal competitive ratings.
+// They bound intermediate products and prevent corrupt persisted input poisoning a ledger.
+const (
+	MaxRatingMagnitude = 1e6
+	MaxRD              = 1e6
+	MinVolatility      = 1e-6
+	MaxVolatility      = 10.0
+	MinTau             = 1e-3
+	MaxTau             = 10.0
+	maxIterations      = 1000
+)
+
+var (
+	ErrInvalidRating = errors.New("invalid Glicko-2 rating")
+	ErrInvalidScore  = errors.New("Glicko-2 score must be 0, 0.5, or 1")
+	ErrInvalidTau    = errors.New("invalid Glicko-2 tau")
+	ErrConvergence   = errors.New("Glicko-2 numerical convergence failed")
+)
+
+func finite(x float64) bool { return !math.IsNaN(x) && !math.IsInf(x, 0) }
+func validRating(p Rating) bool {
+	return finite(p.Rating) && math.Abs(p.Rating) <= MaxRatingMagnitude && finite(p.RD) && p.RD > 0 && p.RD <= MaxRD && finite(p.Volatility) && p.Volatility >= MinVolatility && p.Volatility <= MaxVolatility
+}
+
+// Update preserves the legacy total-function interface. Invalid batches leave a
+// valid player unchanged; corrupt player fields are reset to defaults. Callers
+// that persist updates should use UpdateChecked to surface validation failures.
 func (e *Glicko2Engine) Update(player Rating, matches []MatchResult) Rating {
+	safe := player
+	if !finite(safe.Rating) || math.Abs(safe.Rating) > MaxRatingMagnitude {
+		safe.Rating = DefaultRating
+	}
+	if !finite(safe.RD) || safe.RD <= 0 || safe.RD > MaxRD {
+		safe.RD = DefaultRD
+	}
+	if !finite(safe.Volatility) || safe.Volatility < MinVolatility || safe.Volatility > MaxVolatility {
+		safe.Volatility = DefaultVolatility
+	}
+	tau := DefaultTau
+	if e != nil && finite(e.Tau) && e.Tau >= MinTau && e.Tau <= MaxTau {
+		tau = e.Tau
+	}
+	engine := Glicko2Engine{Tau: tau}
+	updated, err := engine.UpdateChecked(safe, matches)
+	if err != nil {
+		return safe
+	}
+	return updated
+}
+
+// UpdateChecked follows Glickman's worked algorithm with explicit validation
+// and bounded root searches. On error the original player is returned unchanged.
+func (e *Glicko2Engine) UpdateChecked(player Rating, matches []MatchResult) (Rating, error) {
+	if !validRating(player) {
+		return player, ErrInvalidRating
+	}
+	if e == nil || !finite(e.Tau) || e.Tau < MinTau || e.Tau > MaxTau {
+		return player, ErrInvalidTau
+	}
 	tau := e.Tau
-	if tau <= 0 {
-		tau = DefaultTau
+	for _, m := range matches {
+		if !validRating(m.Opponent) {
+			return player, ErrInvalidRating
+		}
+		if m.Score != 0 && m.Score != 0.5 && m.Score != 1 {
+			return player, ErrInvalidScore
+		}
 	}
 
 	// Step 2: Convert to Glicko-2 scale:
@@ -74,12 +136,12 @@ func (e *Glicko2Engine) Update(player Rating, matches []MatchResult) Rating {
 
 	// If player did not compete during rating period:
 	if len(matches) == 0 {
-		newPhi := math.Sqrt(phi*phi + sigma*sigma)
+		newPhi := math.Hypot(phi, sigma)
 		return Rating{
 			Rating:     player.Rating,
-			RD:         newPhi * ScaleConstant,
+			RD:         math.Min(newPhi*ScaleConstant, MaxRD),
 			Volatility: sigma,
-		}
+		}, nil
 	}
 
 	// Step 3: Compute variance v and delta
@@ -90,12 +152,16 @@ func (e *Glicko2Engine) Update(player Rating, matches []MatchResult) Rating {
 		muJ := (m.Opponent.Rating - DefaultRating) / ScaleConstant
 		phiJ := m.Opponent.RD / ScaleConstant
 		gPhiJ := g(phiJ)
-		eVal := E(mu, muJ, phiJ)
+		// Avoid zero information from rounded logistic endpoints.
+		eVal := math.Max(1e-15, math.Min(1-1e-15, E(mu, muJ, phiJ)))
 
 		vInv += gPhiJ * gPhiJ * eVal * (1.0 - eVal)
 		deltaSum += gPhiJ * (m.Score - eVal)
 	}
 
+	if !finite(vInv) || vInv <= 0 || !finite(deltaSum) {
+		return player, ErrConvergence
+	}
 	v := 1.0 / vInv
 	delta := v * deltaSum
 
@@ -114,8 +180,11 @@ func (e *Glicko2Engine) Update(player Rating, matches []MatchResult) Rating {
 		B = math.Log(delta*delta - phi*phi - v)
 	} else {
 		k := 1.0
-		for f(a-k*tau) < 0 {
+		for f(a-k*tau) < 0 && k < maxIterations {
 			k++
+		}
+		if k >= maxIterations {
+			return player, ErrConvergence
 		}
 		B = a - k*tau
 	}
@@ -123,9 +192,17 @@ func (e *Glicko2Engine) Update(player Rating, matches []MatchResult) Rating {
 	fA := f(A)
 	fB := f(B)
 
+	iterations := 0
 	for math.Abs(B-A) > ConvergenceTol {
+		iterations++
+		if iterations > maxIterations || !finite(fA) || !finite(fB) || fA == fB {
+			return player, ErrConvergence
+		}
 		C := A + (A-B)*fA/(fB-fA)
 		fC := f(C)
+		if !finite(C) || !finite(fC) {
+			return player, ErrConvergence
+		}
 		if fC*fB <= 0 {
 			A = B
 			fA = fB
@@ -146,9 +223,13 @@ func (e *Glicko2Engine) Update(player Rating, matches []MatchResult) Rating {
 	newMu := mu + newPhi*newPhi*deltaSum
 
 	// Step 8: Convert back to original scale
-	return Rating{
+	updated := Rating{
 		Rating:     DefaultRating + ScaleConstant*newMu,
 		RD:         ScaleConstant * newPhi,
 		Volatility: newSigma,
 	}
+	if !validRating(updated) {
+		return player, ErrConvergence
+	}
+	return updated, nil
 }

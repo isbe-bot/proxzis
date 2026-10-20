@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/isbe-bot/bottagon/internal/game/parley"
 	"github.com/isbe-bot/bottagon/internal/matchmaker"
 )
 
@@ -26,12 +24,24 @@ func NewMCPAdapter(s *Server) *MCPAdapter {
 
 // Handler returns an http.Handler implementing Streamable HTTP MCP at /mcp.
 func (a *MCPAdapter) Handler() http.Handler {
-	return mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		bot := a.server.authenticateBot(r)
-		return a.buildMCPServer(bot)
+	handler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
+		bot, err := a.server.authenticateBot(r) // authenticated before SDK dispatch
+		if err != nil {
+			return nil
+		}
+		return a.buildMCPServerForRequest(bot, r.Context())
 	}, &mcp.StreamableHTTPOptions{
-		Stateless: true,
+		Stateless:                    true,
+		MaxRequestBodyBytes:          maxRequestBodyBytes,
+		PropagateRequestCancellation: true,
 	})
+	authenticated := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := a.server.requireBot(w, r); !ok {
+			return
+		}
+		handler.ServeHTTP(w, r)
+	})
+	return boundaryHeaders(http.NewCrossOriginProtection().Handler(authenticated))
 }
 
 type FindMatchArgs struct {
@@ -52,6 +62,10 @@ type ForfeitMatchArgs struct {
 type EmptyArgs struct{}
 
 func (a *MCPAdapter) buildMCPServer(bot matchmaker.BotInfo) *mcp.Server {
+	return a.buildMCPServerForRequest(bot, context.Background())
+}
+
+func (a *MCPAdapter) buildMCPServerForRequest(bot matchmaker.BotInfo, requestCtx context.Context) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{
 		Name:    "bottagon-mcp",
 		Version: "1.0.0",
@@ -63,18 +77,11 @@ func (a *MCPAdapter) buildMCPServer(bot matchmaker.BotInfo) *mcp.Server {
 		Name:        "find_match",
 		Description: "Enter the BOTTAGON matchmaking queue to find an opponent (or fall back to House Regular after 8s).",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args FindMatchArgs) (*mcp.CallToolResult, any, error) {
-		prefStake := args.PreferredStake
-		if prefStake <= 0 {
-			prefStake = 1
-		}
-		maxStake := args.MaxStake
-		if maxStake <= 0 {
-			maxStake = 5
-		}
-
-		session, err := a.server.queue.FindMatch(ctx, bot, prefStake, maxStake, matchmaker.MaxQueueWaitTime)
+		ctx, cancel := originatingContext(ctx, requestCtx)
+		defer cancel()
+		session, err := a.server.findMatch(ctx, bot, FindMatchRequest{PreferredStake: args.PreferredStake, MaxStake: args.MaxStake})
 		if err != nil {
-			return errorToolResult(fmt.Sprintf("Matchmaking error: %v", err)), nil, nil
+			return errorToolResult(err.Error()), nil, nil
 		}
 
 		resp := a.server.buildEnvelope(session, bot.ID)
@@ -87,40 +94,13 @@ func (a *MCPAdapter) buildMCPServer(bot matchmaker.BotInfo) *mcp.Server {
 		Name:        "play_turn",
 		Description: "Commit your stance (strike, parry, or feint), side bet, and optional banter for the current Parley round.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args PlayTurnArgs) (*mcp.CallToolResult, any, error) {
-		session, exists := a.server.queue.GetSession(bot.ID)
-		if !exists {
-			return errorToolResult("No active match in progress. Use find_match first."), nil, nil
-		}
-
-		stance, err := parley.ParseStance(args.Stance)
+		ctx, cancel := originatingContext(ctx, requestCtx)
+		defer cancel()
+		resp, err := a.server.playTurn(ctx, bot, TurnRequest{Stance: args.Stance, SideBet: args.SideBet, Say: args.Say})
 		if err != nil {
-			return errorToolResult(fmt.Sprintf("Invalid stance '%s'. Valid: strike, parry, feint.", args.Stance)), nil, nil
+			return errorToolResult(err.Error()), nil, nil
 		}
 
-		session.Mu.Lock()
-		role := parley.Player1
-		if session.P2.ID == bot.ID {
-			role = parley.Player2
-		}
-
-		err = session.Engine.CommitTurn(role, stance, args.Say, args.SideBet)
-		if err != nil {
-			session.Mu.Unlock()
-			return errorToolResult(fmt.Sprintf("Commit error: %v", err)), nil, nil
-		}
-
-		if session.HouseBot != nil && session.Engine.Status != parley.StatusCompleted {
-			houseRole := parley.Player2
-			houseStance := session.HouseBot.SelectStance(session.Engine.Rounds, houseRole)
-			houseBanter := session.HouseBot.SelectBanter(session.Engine.Rounds, houseRole)
-			_ = session.Engine.CommitTurn(houseRole, houseStance, houseBanter, 0)
-		}
-
-		session.SequenceID++
-		session.LastActive = time.Now().UTC()
-		session.Mu.Unlock()
-
-		resp := a.server.buildEnvelope(session, bot.ID)
 		data, _ := json.MarshalIndent(resp, "", "  ")
 		return textToolResult(string(data)), nil, nil
 	})
@@ -135,9 +115,7 @@ func (a *MCPAdapter) buildMCPServer(bot matchmaker.BotInfo) *mcp.Server {
 			return textToolResult(`{"status": "idle", "message": "No active match found"}`), nil, nil
 		}
 
-		session.Mu.Lock()
 		resp := a.server.buildEnvelope(session, bot.ID)
-		session.Mu.Unlock()
 
 		data, _ := json.MarshalIndent(resp, "", "  ")
 		return textToolResult(string(data)), nil, nil
@@ -148,36 +126,24 @@ func (a *MCPAdapter) buildMCPServer(bot matchmaker.BotInfo) *mcp.Server {
 		Name:        "forfeit_match",
 		Description: "Concede and forfeit the active Parley match.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args ForfeitMatchArgs) (*mcp.CallToolResult, any, error) {
-		session, exists := a.server.queue.GetSession(bot.ID)
-		if !exists {
-			return errorToolResult("No active match to forfeit."), nil, nil
+		if !args.Confirm {
+			return errorToolResult("confirmation required"), nil, nil
+		}
+		ctx, cancel := originatingContext(ctx, requestCtx)
+		defer cancel()
+		if err := a.server.forfeitMatch(ctx, bot); err != nil {
+			return errorToolResult(err.Error()), nil, nil
 		}
 
-		session.Mu.Lock()
-		session.Engine.Status = parley.StatusCompleted
-		if session.P1.ID == bot.ID {
-			session.Engine.Winner = parley.Player2
-		} else {
-			session.Engine.Winner = parley.Player1
-		}
-		session.Mu.Unlock()
-
-		a.server.queue.EndSession(session.MatchID)
 		return textToolResult(`{"status": "forfeited", "message": "Match conceded successfully"}`), nil, nil
 	})
 
 	// Tool: bot_status
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "bot_status",
-		Description: "Retrieve contestant purse, honor score, and current Glicko-2 rating.",
+		Description: "Retrieve demonstration contestant telemetry; purse, honor, and rating are not authoritative persisted account state.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args EmptyArgs) (*mcp.CallToolResult, any, error) {
-		status := map[string]interface{}{
-			"bot_id": bot.ID.String(),
-			"name":   bot.Name,
-			"rating": bot.Rating,
-			"honor":  bot.Honor,
-			"purse":  1000,
-		}
+		status := botStatus(bot)
 		data, _ := json.MarshalIndent(status, "", "  ")
 		return textToolResult(string(data)), nil, nil
 	})
@@ -208,4 +174,15 @@ func errorToolResult(errStr string) *mcp.CallToolResult {
 			&mcp.TextContent{Text: fmt.Sprintf("Error: %s", errStr)},
 		},
 	}
+}
+
+// Older MCP protocols detach tool contexts from POST cancellation. Keep game
+// long-polls bound to the originating request without losing SDK context values.
+func originatingContext(ctx, requestCtx context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(requestCtx, cancel)
+	if requestCtx.Err() != nil {
+		cancel()
+	}
+	return ctx, func() { stop(); cancel() }
 }

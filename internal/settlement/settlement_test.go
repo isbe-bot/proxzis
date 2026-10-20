@@ -1,7 +1,10 @@
 package settlement
 
 import (
+	"context"
 	"database/sql"
+	"errors"
+	"math"
 	"testing"
 
 	"github.com/google/uuid"
@@ -14,13 +17,13 @@ import (
 func TestSettlementLogic_Invariants(t *testing.T) {
 	// Table-driven verification of settlement math invariants
 	tests := []struct {
-		name         string
-		winner       parley.PlayerID
-		p1Wager      int
-		p2Wager      int
-		mirrorTies   int
-		wantP1Delta  int
-		wantP2Delta  int
+		name        string
+		winner      parley.PlayerID
+		p1Wager     int
+		p2Wager     int
+		mirrorTies  int
+		wantP1Delta int
+		wantP2Delta int
 	}{
 		{
 			name:        "P1 wins with side bet, P2 loses without bet",
@@ -120,5 +123,69 @@ func TestLockOrderSorting(t *testing.T) {
 
 	if first.String() > second.String() {
 		t.Errorf("expected deterministic lock order")
+	}
+}
+
+// Invalid financial inputs must fail before starting a transaction. This suite
+// also runs on hosts without PostgreSQL binaries.
+func TestRejectInvalidSettlementBeforeDatabaseAccess(t *testing.T) {
+	id, p1, p2 := uuid.New(), uuid.New(), uuid.New()
+	base := parley.NewMatch(id.String(), parley.DefaultConfig())
+	base.Status = parley.StatusCompleted
+	base.Winner = parley.Player1
+	tests := []struct {
+		name   string
+		change func(*parley.Match)
+		want   error
+	}{
+		{"engine ID mismatch", func(m *parley.Match) { m.ID = uuid.NewString() }, ErrInvalidSettlement},
+		{"malformed engine ID", func(m *parley.Match) { m.ID = "not-a-uuid" }, ErrInvalidSettlement},
+		{"incomplete match", func(m *parley.Match) { m.Status = parley.StatusInProgress }, ErrInvalidSettlement},
+		{"unknown winner", func(m *parley.Match) { m.Winner = "intruder" }, ErrInvalidSettlement},
+		{"negative winner wager", func(m *parley.Match) { m.Config.P1SideBet = -1 }, ErrInvalidSettlement},
+		{"negative loser wager", func(m *parley.Match) { m.Config.P2SideBet = -1 }, ErrInvalidSettlement},
+		{"negative mirror count", func(m *parley.Match) { m.MirrorTiesCount = -1 }, ErrInvalidSettlement},
+		{"negative score", func(m *parley.Match) { m.Score.P2 = -1 }, ErrInvalidSettlement},
+		{"oversized score", func(m *parley.Match) { m.Score.P1 = math.MaxInt32 + 1 }, ErrInvalidSettlement},
+		{"machine sized wager", func(m *parley.Match) { m.Config.P1SideBet = int(^uint(0) >> 1) }, ErrInvalidSettlement},
+		{"winning delta cannot fit integer", func(m *parley.Match) { m.Config.P1SideBet = math.MaxInt32 }, ErrBalanceBounds},
+		{"losing delta counterpart cannot fit integer", func(m *parley.Match) { m.Config.P2SideBet = math.MaxInt32 }, ErrBalanceBounds},
+		{"penalty plus losing base cannot fit counterpart", func(m *parley.Match) { m.MirrorTiesCount = math.MaxInt32 }, ErrBalanceBounds},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := *base
+			tt.change(&m)
+			if err := NewService(nil).SettleMatch(context.Background(), id, p1, p2, &m); !errors.Is(err, tt.want) {
+				t.Fatalf("got %v want %v", err, tt.want)
+			}
+		})
+	}
+	for _, ids := range [][3]uuid.UUID{{uuid.Nil, p1, p2}, {id, uuid.Nil, p2}, {id, p1, uuid.Nil}, {id, p1, p1}} {
+		if err := NewService(nil).SettleMatch(context.Background(), ids[0], ids[1], ids[2], base); !errors.Is(err, ErrInvalidSettlement) {
+			t.Errorf("invalid IDs: %v", err)
+		}
+	}
+	if err := NewService(nil).SettleMatch(context.Background(), id, p1, p2, nil); !errors.Is(err, ErrInvalidSettlement) {
+		t.Errorf("nil match: %v", err)
+	}
+}
+
+func TestValidateSettlementStorageBoundaries(t *testing.T) {
+	id, p1, p2 := uuid.New(), uuid.New(), uuid.New()
+	m := parley.NewMatch(id.String(), parley.DefaultConfig())
+	m.Status = parley.StatusCompleted
+	m.Winner = parley.Player1
+	m.Config.P1SideBet = math.MaxInt32 - 1
+	m.Config.P2SideBet = math.MaxInt32 - 1
+	if err := validateMatch(id, p1, p2, m); err != nil {
+		t.Fatalf("representable boundary deltas: %v", err)
+	}
+	s1, s2, err := m.Settle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s1.NetMarbleDelta != math.MaxInt32 || s2.NetMarbleDelta != -math.MaxInt32 {
+		t.Errorf("boundary deltas=%d/%d", s1.NetMarbleDelta, s2.NetMarbleDelta)
 	}
 }

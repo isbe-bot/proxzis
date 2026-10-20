@@ -17,7 +17,7 @@ test:
 	go test -v -race -cover ./...
 
 lint:
-	golangci-lint run ./... || go vet ./...
+	if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run ./...; else go vet ./...; fi
 
 clean:
 	rm -rf $(BUILD_DIR)

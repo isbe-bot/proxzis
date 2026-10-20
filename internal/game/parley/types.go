@@ -16,13 +16,17 @@ const (
 )
 
 var (
-	ErrInvalidStance    = errors.New("invalid stance")
-	ErrInvalidModifier  = errors.New("invalid modifier card")
-	ErrMatchOver        = errors.New("match is already concluded")
-	ErrNegativeWager    = errors.New("pass-line wager cannot be negative")
-	ErrExcessiveWager   = errors.New("pass-line wager exceeds purse")
-	ErrRoundNotPending  = errors.New("round is not in pending state")
-	ErrMissingStance    = errors.New("both players must commit a stance")
+	ErrInvalidPlayer     = errors.New("unknown player")
+	ErrAlreadyCommitted  = errors.New("player already committed this round")
+	ErrInvalidConfig     = errors.New("invalid match configuration")
+	ErrInvalidWagerRound = errors.New("side wager can only be changed in round 1")
+	ErrInvalidStance     = errors.New("invalid stance")
+	ErrInvalidModifier   = errors.New("invalid modifier card")
+	ErrMatchOver         = errors.New("match is already concluded")
+	ErrNegativeWager     = errors.New("pass-line wager cannot be negative")
+	ErrExcessiveWager    = errors.New("pass-line wager exceeds purse")
+	ErrRoundNotPending   = errors.New("round is not in pending state")
+	ErrMissingStance     = errors.New("both players must commit a stance")
 )
 
 // ParseStance parses a string into a validated Stance.
@@ -48,10 +52,10 @@ func (s Stance) IsValid() bool {
 type ModifierCard string
 
 const (
-	ModifierNone            ModifierCard = ""
+	ModifierNone             ModifierCard = ""
 	ModifierMirrorTiePenalty ModifierCard = "MirrorTiePenalty"
-	ModifierFeintSurge      ModifierCard = "FeintSurge"
-	ModifierParryRebound    ModifierCard = "ParryRebound"
+	ModifierFeintSurge       ModifierCard = "FeintSurge"
+	ModifierParryRebound     ModifierCard = "ParryRebound"
 )
 
 // ParseModifierCard validates and parses a modifier card string.
@@ -106,4 +110,9 @@ func (m ModifierCard) Info() ModifierCardInfo {
 			Description: "Standard Parley rules with no modifier cards.",
 		}
 	}
+}
+
+// IsValid reports whether the card is supported, including standard play.
+func (m ModifierCard) IsValid() bool {
+	return m == ModifierNone || m == ModifierMirrorTiePenalty || m == ModifierFeintSurge || m == ModifierParryRebound
 }

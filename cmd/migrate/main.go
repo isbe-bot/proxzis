@@ -27,7 +27,11 @@ func main() {
 	cfg := config.Load()
 	logger := obs.InitLogger("info", "development")
 
-	logger.Info("connecting to database for migrations", slog.String("db_url", cfg.DatabaseURL))
+	if cfg.DatabaseURL == "" {
+		logger.Error("DATABASE_URL must be explicitly configured")
+		os.Exit(1)
+	}
+	logger.Info("connecting to database for migrations")
 
 	db, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {

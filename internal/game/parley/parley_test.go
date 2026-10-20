@@ -128,14 +128,14 @@ func TestResolveRound_Modifiers(t *testing.T) {
 
 func TestPassLineSettlement(t *testing.T) {
 	tests := []struct {
-		name        string
-		isWinner    bool
-		isDraw      bool
-		wager       int
-		mirrorTies  int
-		wantDelta   int
-		wantReward  int
-		wantLoss    int
+		name       string
+		isWinner   bool
+		isDraw     bool
+		wager      int
+		mirrorTies int
+		wantDelta  int
+		wantReward int
+		wantLoss   int
 	}{
 		{"Win with 0 wager", true, false, 0, 0, 1, 1, 0},
 		{"Win with 10 wager", true, false, 10, 0, 11, 1, 0},
@@ -163,6 +163,7 @@ func TestPassLineSettlement(t *testing.T) {
 
 func TestMatch_BestOf7_FirstTo4Wins(t *testing.T) {
 	cfg := DefaultConfig()
+	cfg.TargetWins, cfg.MaxRounds = 4, 7 // Explicit legacy/custom best-of-seven coverage.
 	match := NewMatch("match-01", cfg)
 
 	// Round 1-4: Player 1 sweeps with Strike vs Feint
@@ -195,6 +196,7 @@ func TestMatch_BestOf7_FirstTo4Wins(t *testing.T) {
 
 func TestMatch_BestOf7_SuddenDeath(t *testing.T) {
 	cfg := DefaultConfig()
+	cfg.TargetWins, cfg.MaxRounds = 4, 7 // Explicit legacy/custom best-of-seven coverage.
 	match := NewMatch("match-sd", cfg)
 
 	// Play 7 tied rounds

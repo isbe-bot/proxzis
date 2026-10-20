@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"github.com/isbe-bot/bottagon/internal/config"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -24,8 +28,8 @@ func setupTestRouter() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(HealthResponse{
-			Status:    "ok",
-			Version:   Version,
+			Status:  "ok",
+			Version: Version,
 		})
 	})
 
@@ -74,4 +78,42 @@ func TestMetricsEndpoint(t *testing.T) {
 	if len(body) == 0 {
 		t.Fatalf("expected non-empty metrics output")
 	}
+}
+
+func TestHTTPServerLimitsAndCancellation(t *testing.T) {
+	base, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started := make(chan struct{})
+	stopped := make(chan struct{})
+	s := newHTTPServer(config.Load(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { close(started); <-r.Context().Done(); close(stopped) }), base)
+	if s.ReadHeaderTimeout <= 0 || s.MaxHeaderBytes > 16<<10 || s.MaxHeaderBytes <= 0 {
+		t.Fatal("missing ingress bounds")
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- s.Serve(listener) }()
+	defer func() { _ = s.Close(); <-serveDone }()
+	requestDone := make(chan struct{})
+	go func() {
+		defer close(requestDone)
+		resp, err := http.Get("http://" + listener.Addr().String())
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("request never started")
+	}
+	cancel()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not cancel request")
+	}
+	<-requestDone
 }

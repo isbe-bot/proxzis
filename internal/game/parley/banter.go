@@ -1,74 +1,88 @@
 package parley
 
 import (
-	"regexp"
+	"html"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
-// Banter represents safe, quarantined banter text.
+// Banter is display text, never an instruction or trusted markup.
 type Banter string
 
 const MaxBanterLen = 140
 
-var (
-	tagPattern = regexp.MustCompile(`(?i)<[^>]*>`)
-)
+// MaxBanterInputBytes bounds work before decoding entities or examining markup.
+// Oversized input is muted rather than partially interpreting hostile markup.
+const MaxBanterInputBytes = 16 * 1024
 
-// SanitizeBanter sanitizes banter text:
-// 1. Strips HTML/XML tags completely (including tag contents if script/style/etc).
-// 2. Strips backticks, markdown control characters (*, _, ~, #, |, etc.), and dangerous control sequences.
-// 3. Replaces newlines and tabs with spaces.
-// 4. Caps at 140 UTF-8 characters.
+// SanitizeBanter produces bounded plain UTF-8 text. This is structural hygiene,
+// not a semantic prompt-injection classifier; recipients must treat it as data.
 func SanitizeBanter(raw string) string {
-	if raw == "" {
+	if len(raw) == 0 || len(raw) > MaxBanterInputBytes {
 		return ""
 	}
-
-	// Remove script blocks completely
-	reScript := regexp.MustCompile(`(?is)<script.*?>.*?</script>`)
-	cleaned := reScript.ReplaceAllString(raw, "")
-
-	// Remove any remaining tags
-	cleaned = tagPattern.ReplaceAllString(cleaned, "")
-
-	// Remove markdown control characters & structural punctuation:
-	// backticks, *, _, ~, \, {, }, [, ], (, ), #, |, double-quotes
-	var sb strings.Builder
-	for _, r := range cleaned {
-		switch r {
-		case '`', '*', '_', '~', '\\', '{', '}', '[', ']', '(', ')', '#', '|', '"':
-			continue
-		case '\r', '\n', '\t':
-			sb.WriteRune(' ')
-		default:
-			// Filter unprintable/control ASCII
-			if r < 32 || r == 127 {
-				continue
+	raw = html.UnescapeString(raw)
+	var out strings.Builder
+	out.Grow(min(len(raw), MaxBanterLen*utf8.UTFMax))
+	count := 0
+	space := false
+	blocked := ""
+	for i := 0; i < len(raw) && count < MaxBanterLen; {
+		if raw[i] == '<' {
+			end := strings.IndexByte(raw[i:], '>')
+			if end < 0 {
+				break
+			} // Fail closed on incomplete markup.
+			tag := strings.TrimSpace(raw[i+1 : i+end])
+			closing := strings.HasPrefix(tag, "/")
+			tag = strings.TrimSpace(strings.TrimPrefix(tag, "/"))
+			nameEnd := strings.IndexFunc(tag, func(r rune) bool { return unicode.IsSpace(r) || r == '/' })
+			if nameEnd >= 0 {
+				tag = tag[:nameEnd]
 			}
-			sb.WriteRune(r)
+			if blocked != "" {
+				if closing && strings.EqualFold(tag, blocked) {
+					blocked = ""
+				}
+			} else if !closing && (strings.EqualFold(tag, "script") || strings.EqualFold(tag, "style")) {
+				blocked = strings.ToLower(tag)
+			}
+			i += end + 1
+			continue
 		}
+		r, size := utf8.DecodeRuneInString(raw[i:])
+		i += size
+		if blocked != "" || (r == utf8.RuneError && size == 1) {
+			continue
+		}
+		if unicode.IsSpace(r) {
+			space = count > 0
+			continue
+		}
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf) || r == 0xfffe || r == 0xffff {
+			continue
+		}
+		switch r {
+		case '`', '*', '_', '~', '\\', '{', '}', '[', ']', '(', ')', '#', '|', '"', '<', '>':
+			continue
+		}
+		if space {
+			out.WriteByte(' ')
+			count++
+			space = false
+			if count >= MaxBanterLen {
+				break
+			}
+		}
+		out.WriteRune(r)
+		count++
 	}
-
-	result := strings.TrimSpace(sb.String())
-	// Collapse multiple spaces
-	for strings.Contains(result, "  ") {
-		result = strings.ReplaceAll(result, "  ", " ")
-	}
-
-	// Cap at 140 UTF-8 characters
-	if utf8.RuneCountInString(result) > MaxBanterLen {
-		runes := []rune(result)
-		result = string(runes[:MaxBanterLen])
-	}
-
-	return strings.TrimSpace(result)
+	return strings.TrimSpace(out.String())
 }
 
-// QuarantineTag wraps safe banter in structural XML quarantine tags.
-func QuarantineTag(sanitized string) string {
-	if sanitized == "" {
-		return `<opponent_banter untrusted="true"></opponent_banter>`
-	}
-	return `<opponent_banter untrusted="true">` + sanitized + `</opponent_banter>`
+// QuarantineTag owns its trust boundary: callers may pass raw or previously
+// sanitized text. Escaping is mandatory even after sanitizing (notably '&').
+func QuarantineTag(text string) string {
+	return `<opponent_banter untrusted="true">` + html.EscapeString(SanitizeBanter(text)) + `</opponent_banter>`
 }

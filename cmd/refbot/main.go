@@ -61,14 +61,24 @@ func (c *BotClient) doRequest(ctx context.Context, method, path string, reqBody 
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(respBytes))
+		respBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("unexpected status %d: %q", resp.StatusCode, string(respBytes))
 	}
 
 	if out != nil {
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		data, err := io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
+		if err != nil {
+			return fmt.Errorf("read response: %w", err)
+		}
+		if len(data) > 1<<20 {
+			return fmt.Errorf("response exceeds 1 MiB limit")
+		}
+		if err := json.Unmarshal(data, out); err != nil {
 			return fmt.Errorf("decode response: %w", err)
 		}
+	}
+	if out == nil {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 	}
 	return nil
 }
@@ -113,14 +123,14 @@ func chooseStance(turn *httpapi.TurnResponse, rng *rand.Rand) (string, int, stri
 	say := randomBanter[rng.Intn(len(randomBanter))]
 
 	// Simple heuristic based on modifier card
-	if turn.ActiveCard.ID == "feint_surge" && rng.Float32() < 0.6 {
+	if turn.ActiveCard.ID == "FeintSurge" && rng.Float32() < 0.6 {
 		stance = "feint"
-	} else if turn.ActiveCard.ID == "mirror_tie_penalty" && rng.Float32() < 0.5 {
+	} else if turn.ActiveCard.ID == "MirrorTiePenalty" && rng.Float32() < 0.5 {
 		stance = "parry"
 	}
 
 	sideBet := 0
-	if turn.Round > 1 && turn.Scores.You > turn.Scores.Opponent && rng.Float32() < 0.3 {
+	if turn.Round == 1 && rng.Float32() < 0.3 {
 		sideBet = 1
 	}
 
@@ -174,7 +184,7 @@ func main() {
 		*token = uuid.New().String()
 	}
 
-	log.Printf("[refbot] Initializing Reference Bot Contestant with token: %s", *token)
+	log.Print("[refbot] Initializing Reference Bot Contestant")
 	client := NewBotClient(*serverURL, *token)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)

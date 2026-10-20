@@ -62,8 +62,10 @@ func TestHTTPAPI_FullMatchLifecycleAgainstHouse(t *testing.T) {
 	// 3. Play Rounds until match completes
 	for i := 0; i < 7; i++ {
 		turnReq := TurnRequest{
-			Stance:  "strike",
-			SideBet: 10,
+			Stance: "strike",
+			// Matchmaking does not yet hydrate a real account purse; no credit
+			// may be inferred from the demonstration bot/status response.
+			SideBet: 0,
 			Say:     "Good luck, mate! <script>alert(1)</script>",
 		}
 		bodyBytes, _ := json.Marshal(turnReq)

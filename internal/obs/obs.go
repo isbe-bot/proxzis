@@ -6,6 +6,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -58,29 +61,33 @@ func InitLogger(level string, env string) *slog.Logger {
 	return logger
 }
 
-type responseWriterDelegator struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (d *responseWriterDelegator) WriteHeader(code int) {
-	d.statusCode = code
-	d.ResponseWriter.WriteHeader(code)
-}
-
 func MetricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		d := &responseWriterDelegator{ResponseWriter: w, statusCode: http.StatusOK}
+		d := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		next.ServeHTTP(d, r)
 		duration := time.Since(start).Seconds()
 
-		pattern := r.Pattern
-		if pattern == "" {
-			pattern = r.URL.Path
+		// Use the router template, never attacker-controlled URLs or methods.
+		// Raw paths turn misses into unbounded Prometheus series and leak secrets.
+		pattern := "unmatched"
+		if routeCtx := chi.RouteContext(r.Context()); routeCtx != nil && routeCtx.RoutePattern() != "" {
+			pattern = routeCtx.RoutePattern()
+		} else if r.Pattern != "" {
+			pattern = r.Pattern
+		}
+		method := r.Method
+		switch method {
+		case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions, http.MethodConnect, http.MethodTrace:
+		default:
+			method = "OTHER"
+		}
+		status := d.Status()
+		if status == 0 {
+			status = http.StatusOK
 		}
 
-		HttpRequestsTotal.WithLabelValues(r.Method, pattern, http.StatusText(d.statusCode)).Inc()
-		HttpRequestDurationSeconds.WithLabelValues(r.Method, pattern).Observe(duration)
+		HttpRequestsTotal.WithLabelValues(method, pattern, http.StatusText(status)).Inc()
+		HttpRequestDurationSeconds.WithLabelValues(method, pattern).Observe(duration)
 	})
 }

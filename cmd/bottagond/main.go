@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -43,7 +44,6 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(obs.MetricsMiddleware)
 
@@ -75,13 +75,9 @@ func main() {
 	mcpAdapter := httpapi.NewMCPAdapter(apiServer)
 	r.Mount("/mcp", mcpAdapter.Handler())
 
-	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      r,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-		IdleTimeout:  cfg.IdleTimeout,
-	}
+	serverCtx, stopServer := context.WithCancel(context.Background())
+	defer stopServer()
+	server := newHTTPServer(cfg, r, serverCtx)
 
 	serverErrors := make(chan error, 1)
 
@@ -94,6 +90,7 @@ func main() {
 
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(shutdown)
 
 	select {
 	case err := <-serverErrors:
@@ -101,6 +98,7 @@ func main() {
 		os.Exit(1)
 	case sig := <-shutdown:
 		logger.Info("shutdown signal received", slog.String("signal", sig.String()))
+		stopServer()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
@@ -110,4 +108,18 @@ func main() {
 		}
 		logger.Info("bottagond terminated cleanly")
 	}
+}
+
+func newHTTPServer(cfg *config.Config, handler http.Handler, baseCtx context.Context) *http.Server {
+	return &http.Server{
+		BaseContext:       func(net.Listener) context.Context { return baseCtx },
+		ReadHeaderTimeout: 5 * time.Second,
+		MaxHeaderBytes:    16 << 10,
+		Addr:              fmt.Sprintf(":%d", cfg.Port),
+		Handler:           handler,
+		ReadTimeout:       cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+	}
+
 }

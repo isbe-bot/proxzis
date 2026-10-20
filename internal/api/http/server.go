@@ -1,7 +1,11 @@
 package httpapi
 
 import (
+	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -9,8 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/isbe-bot/bottagon/internal/game/parley"
 	"github.com/isbe-bot/bottagon/internal/conduct"
+	"github.com/isbe-bot/bottagon/internal/game/parley"
 	"github.com/isbe-bot/bottagon/internal/matchmaker"
 )
 
@@ -31,6 +35,8 @@ func NewServer(q *matchmaker.Queue) *Server {
 // Routes registers the /v1 endpoints.
 func (s *Server) Routes() chi.Router {
 	r := chi.NewRouter()
+	r.Use(boundaryHeaders)
+	r.Use(http.NewCrossOriginProtection().Handler)
 
 	r.Post("/match/find", s.handleFindMatch)
 	r.Post("/match/turn", s.handleCommitTurn)
@@ -55,19 +61,19 @@ type TurnRequest struct {
 }
 
 type TurnResponse struct {
-	MatchID        string            `json:"match_id"`
-	SequenceID     int               `json:"sequence_id"`
-	Round          int               `json:"round"`
-	Scores         ScoresResponse    `json:"scores"`
-	BaseStake      int               `json:"base_stake"`
-	YourSideBet    int               `json:"your_side_bet"`
+	MatchID        string             `json:"match_id"`
+	SequenceID     int                `json:"sequence_id"`
+	Round          int                `json:"round"`
+	Scores         ScoresResponse     `json:"scores"`
+	BaseStake      int                `json:"base_stake"`
+	YourSideBet    int                `json:"your_side_bet"`
 	ActiveCard     ActiveCardResponse `json:"active_card"`
-	Opponent       OpponentResponse  `json:"opponent"`
-	OpponentBanter string            `json:"opponent_banter"`
-	ValidActions   []string          `json:"valid_actions"`
-	Status         string            `json:"status"`
-	Winner         string            `json:"winner,omitempty"`
-	TimeoutSeconds int               `json:"timeout_seconds"`
+	Opponent       OpponentResponse   `json:"opponent"`
+	OpponentBanter string             `json:"opponent_banter"`
+	ValidActions   []string           `json:"valid_actions"`
+	Status         string             `json:"status"`
+	Winner         string             `json:"winner,omitempty"`
+	TimeoutSeconds int                `json:"timeout_seconds"`
 }
 
 type ScoresResponse struct {
@@ -88,49 +94,112 @@ type OpponentResponse struct {
 	IsHouse bool   `json:"is_house"`
 }
 
-func (s *Server) authenticateBot(r *http.Request) matchmaker.BotInfo {
-	// Static Bearer token parsing (or fallback demo bot ID for testing)
-	authHeader := r.Header.Get("Authorization")
-	botName := "ContestantBot"
-	botID := uuid.Nil
-
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if parsed, err := uuid.Parse(token); err == nil {
-			botID = parsed
-		} else {
-			botID = uuid.NewSHA1(uuid.NameSpaceURL, []byte(token))
-			botName = token
+// authenticateBot treats a bearer as an opaque capability, never as a public ID
+// or display name. This prototype has no credential registry: production must
+// replace self-enrollment with verified, issued credentials.
+func (s *Server) authenticateBot(r *http.Request) (matchmaker.BotInfo, error) {
+	values := r.Header.Values("Authorization")
+	if len(values) != 1 {
+		return matchmaker.BotInfo{}, errors.New("bearer token required")
+	}
+	scheme, token, ok := strings.Cut(values[0], " ")
+	if !ok || !strings.EqualFold(scheme, "Bearer") || len(token) < 16 || len(token) > 256 {
+		return matchmaker.BotInfo{}, errors.New("invalid bearer token")
+	}
+	credential := strings.TrimRight(token, "=")
+	if credential == "" {
+		return matchmaker.BotInfo{}, errors.New("invalid bearer token")
+	}
+	for _, c := range credential {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune("-._~+/", c)) {
+			return matchmaker.BotInfo{}, errors.New("invalid bearer token")
 		}
 	}
-
-	if botID == uuid.Nil {
-		botID = uuid.New()
+	if id, err := uuid.Parse(token); err == nil && id == uuid.Nil {
+		return matchmaker.BotInfo{}, errors.New("invalid bearer token")
 	}
+	id := uuid.NewHash(sha256.New(), uuid.NameSpaceURL, []byte("bottagon:bearer:"+token), 5)
+	return matchmaker.BotInfo{ID: id, Name: "ContestantBot", Rating: 1500, Honor: 100}, nil
+}
 
-	return matchmaker.BotInfo{
-		ID:      botID,
-		Name:    botName,
-		Rating:  1500.0,
-		Honor:   100,
-		IsHouse: false,
+func (s *Server) requireBot(w http.ResponseWriter, r *http.Request) (matchmaker.BotInfo, bool) {
+	bot, err := s.authenticateBot(r)
+	if err != nil {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="bottagon"`)
+		http.Error(w, "valid bearer token required", http.StatusUnauthorized)
+		return matchmaker.BotInfo{}, false
 	}
+	return bot, true
+}
+
+const maxRequestBodyBytes = 16 << 10
+
+func boundaryHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		if r.ContentLength > maxRequestBodyBytes {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		if r.Body == nil {
+			r.Body = http.NoBody
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
+	dec := json.NewDecoder(r.Body)
+	// Decode through a raw value so JSON null cannot silently become a zero request.
+	var raw json.RawMessage
+	err := dec.Decode(&raw)
+	if err == nil {
+		if string(raw) == "null" {
+			err = errors.New("null request")
+		} else {
+			inner := json.NewDecoder(strings.NewReader(string(raw)))
+			inner.DisallowUnknownFields()
+			err = inner.Decode(dst)
+		}
+	}
+	if err == nil {
+		var extra any
+		if tailErr := dec.Decode(&extra); tailErr != io.EOF {
+			if tailErr != nil {
+				err = tailErr
+			} else {
+				err = errors.New("multiple values")
+			}
+		}
+	}
+	if err != nil {
+		var limit *http.MaxBytesError
+		if errors.As(err, &limit) {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+		}
+		return false
+	}
+	return true
 }
 
 func (s *Server) handleFindMatch(w http.ResponseWriter, r *http.Request) {
-	bot := s.authenticateBot(r)
-
-	if s.moderator.IsBotSentHome(bot.ID) {
-		http.Error(w, "bot is temporarily barred from the parlor for conduct violations", http.StatusForbidden)
+	bot, ok := s.requireBot(w, r)
+	if !ok {
 		return
 	}
 
 	var req FindMatchRequest
-	_ = json.NewDecoder(r.Body).Decode(&req)
-
-	session, err := s.queue.FindMatch(r.Context(), bot, req.PreferredStake, req.MaxStake, matchmaker.MaxQueueWaitTime)
+	if !decodeBody(w, r, &req) {
+		return
+	}
+	session, err := s.findMatch(r.Context(), bot, req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusRequestTimeout)
+		writeActionError(w, err)
 		return
 	}
 
@@ -141,27 +210,84 @@ func (s *Server) handleFindMatch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCommitTurn(w http.ResponseWriter, r *http.Request) {
-	bot := s.authenticateBot(r)
-
-	session, exists := s.queue.GetSession(bot.ID)
-	if !exists {
-		http.Error(w, "no active match found", http.StatusNotFound)
+	bot, ok := s.requireBot(w, r)
+	if !ok {
 		return
 	}
 
 	var req TurnRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	if !decodeBody(w, r, &req) {
 		return
 	}
+	resp, err := s.playTurn(r.Context(), bot, req)
+	if err != nil {
+		writeActionError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
 
+type actionError struct {
+	status  int
+	message string
+}
+
+func (e actionError) Error() string { return e.message }
+func writeActionError(w http.ResponseWriter, err error) {
+	var e actionError
+	if errors.As(err, &e) {
+		http.Error(w, e.message, e.status)
+	} else {
+		http.Error(w, "request failed", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) findMatch(ctx context.Context, bot matchmaker.BotInfo, req FindMatchRequest) (*matchmaker.MatchSession, error) {
+	if ctx.Err() != nil {
+		return nil, actionError{http.StatusRequestTimeout, "request canceled"}
+	}
+	if s.moderator.IsBotSentHome(bot.ID) {
+		return nil, actionError{http.StatusForbidden, "bot is temporarily barred from the parlor"}
+	}
+	if req.PreferredStake < 0 || req.MaxStake < 0 || req.MaxStake > 0 && req.PreferredStake > req.MaxStake {
+		return nil, actionError{http.StatusBadRequest, "invalid stake range"}
+	}
+	session, err := s.queue.FindMatch(ctx, bot, req.PreferredStake, req.MaxStake, matchmaker.MaxQueueWaitTime)
+	if err != nil {
+		return nil, actionError{http.StatusRequestTimeout, "matchmaking unavailable"}
+	}
+	return session, nil
+}
+
+func (s *Server) playTurn(ctx context.Context, bot matchmaker.BotInfo, req TurnRequest) (TurnResponse, error) {
+	if ctx.Err() != nil {
+		return TurnResponse{}, actionError{http.StatusRequestTimeout, "request canceled"}
+	}
+	if req.SideBet < 0 {
+		return TurnResponse{}, actionError{http.StatusBadRequest, "invalid side bet"}
+	}
+	if s.moderator.IsBotSentHome(bot.ID) {
+		return TurnResponse{}, actionError{http.StatusForbidden, "bot is temporarily barred from the parlor"}
+	}
+	session, exists := s.queue.GetSession(bot.ID)
+	if !exists {
+		return TurnResponse{}, actionError{http.StatusNotFound, "no active match found"}
+	}
 	stance, err := parley.ParseStance(req.Stance)
 	if err != nil {
-		http.Error(w, "invalid stance", http.StatusBadRequest)
-		return
+		return TurnResponse{}, actionError{http.StatusBadRequest, "invalid stance"}
 	}
 
 	session.Mu.Lock()
+	if ctx.Err() != nil {
+		session.Mu.Unlock()
+		return TurnResponse{}, actionError{http.StatusRequestTimeout, "request canceled"}
+	}
+	if session.P1.ID != bot.ID && session.P2.ID != bot.ID {
+		session.Mu.Unlock()
+		return TurnResponse{}, actionError{http.StatusForbidden, "not a match participant"}
+	}
 	role := parley.Player1
 	if session.P2.ID == bot.ID {
 		role = parley.Player2
@@ -175,8 +301,7 @@ func (s *Server) handleCommitTurn(w http.ResponseWriter, r *http.Request) {
 	err = session.Engine.CommitTurn(role, stance, sanitizedSay, req.SideBet)
 	if err != nil {
 		session.Mu.Unlock()
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return TurnResponse{}, actionError{http.StatusBadRequest, "turn rejected"}
 	}
 
 	// If playing against House Regular, house commits automatically
@@ -188,37 +313,37 @@ func (s *Server) handleCommitTurn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	roundResolved := session.Engine.IsRoundResolved()
+	session.SequenceID++
+	session.LastActive = time.Now().UTC()
 	if roundResolved || session.Engine.Status == parley.StatusCompleted {
-		session.SequenceID++
-		session.LastActive = time.Now().UTC()
-		select {
-		case session.TurnReady <- struct{}{}:
-		default:
-		}
+		close(session.TurnReady)
+		session.TurnReady = make(chan struct{})
 	}
 	isPeerMatch := session.HouseBot == nil && !roundResolved && session.Engine.Status != parley.StatusCompleted
+	ready := session.TurnReady // snapshot this round's broadcast under the lock
 	session.Mu.Unlock()
 
 	// If peer match and waiting for opponent move, hold briefly
 	if isPeerMatch {
+		timer := time.NewTimer(500 * time.Millisecond)
+		defer timer.Stop()
 		select {
-		case <-session.TurnReady:
-		case <-time.After(500 * time.Millisecond):
-		case <-r.Context().Done():
-			return
+		case <-ready:
+		case <-timer.C:
+		case <-ctx.Done():
+			return TurnResponse{}, actionError{http.StatusRequestTimeout, "request canceled"}
 		}
 	}
 
-	session.Mu.Lock()
 	resp := s.buildEnvelope(session, bot.ID)
-	session.Mu.Unlock()
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(resp)
+	return resp, nil
 }
 
 func (s *Server) handleGetCurrentMatch(w http.ResponseWriter, r *http.Request) {
-	bot := s.authenticateBot(r)
+	bot, ok := s.requireBot(w, r)
+	if !ok {
+		return
+	}
 
 	session, exists := s.queue.GetSession(bot.ID)
 	if !exists {
@@ -226,9 +351,7 @@ func (s *Server) handleGetCurrentMatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session.Mu.Lock()
 	resp := s.buildEnvelope(session, bot.ID)
-	session.Mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -236,24 +359,15 @@ func (s *Server) handleGetCurrentMatch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleForfeitMatch(w http.ResponseWriter, r *http.Request) {
-	bot := s.authenticateBot(r)
-
-	session, exists := s.queue.GetSession(bot.ID)
-	if !exists {
-		http.Error(w, "no active match found", http.StatusNotFound)
+	bot, ok := s.requireBot(w, r)
+	if !ok {
 		return
 	}
 
-	session.Mu.Lock()
-	session.Engine.Status = parley.StatusCompleted
-	if session.P1.ID == bot.ID {
-		session.Engine.Winner = parley.Player2
-	} else {
-		session.Engine.Winner = parley.Player1
+	if err := s.forfeitMatch(r.Context(), bot); err != nil {
+		writeActionError(w, err)
+		return
 	}
-	session.Mu.Unlock()
-
-	s.queue.EndSession(session.MatchID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -263,18 +377,62 @@ func (s *Server) handleForfeitMatch(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) forfeitMatch(ctx context.Context, bot matchmaker.BotInfo) error {
+	if ctx.Err() != nil {
+		return actionError{http.StatusRequestTimeout, "request canceled"}
+	}
+	session, exists := s.queue.GetSession(bot.ID)
+	if !exists {
+		return actionError{http.StatusNotFound, "no active match found"}
+	}
+	session.Mu.Lock()
+	if ctx.Err() != nil {
+		session.Mu.Unlock()
+		return actionError{http.StatusRequestTimeout, "request canceled"}
+	}
+	if session.P1.ID != bot.ID && session.P2.ID != bot.ID {
+		session.Mu.Unlock()
+		return actionError{http.StatusForbidden, "not a match participant"}
+	}
+	// A completed outcome is immutable, even if another request fetched the
+	// session before completion/eviction.
+	if session.Engine.Status == parley.StatusCompleted {
+		session.Mu.Unlock()
+		return actionError{http.StatusConflict, "match already completed"}
+	}
+	session.Engine.Status = parley.StatusCompleted
+	if session.P1.ID == bot.ID {
+		session.Engine.Winner = parley.Player2
+	} else {
+		session.Engine.Winner = parley.Player1
+	}
+	session.SequenceID++
+	session.LastActive = time.Now().UTC()
+	close(session.TurnReady)
+	session.TurnReady = make(chan struct{})
+	session.Mu.Unlock()
+	s.queue.EndSession(session.MatchID)
+	return nil
+}
+
 func (s *Server) handleGetBotStatus(w http.ResponseWriter, r *http.Request) {
-	bot := s.authenticateBot(r)
+	bot, ok := s.requireBot(w, r)
+	if !ok {
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"bot_id": bot.ID,
-		"name":   bot.Name,
-		"rating": bot.Rating,
-		"honor":  bot.Honor,
-		"purse":  1000,
-	})
+	_ = json.NewEncoder(w).Encode(botStatus(bot))
+}
+
+// Keep demonstration telemetry explicit and identical across transports. No
+// persistent account service is wired into this boundary yet.
+func botStatus(bot matchmaker.BotInfo) map[string]any {
+	return map[string]any{
+		"bot_id": bot.ID, "name": bot.Name, "rating": bot.Rating,
+		"honor": bot.Honor, "purse": 1000, "demo": true,
+	}
 }
 
 type ReportRequest struct {
@@ -284,31 +442,35 @@ type ReportRequest struct {
 }
 
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
-	bot := s.authenticateBot(r)
-
-	var req ReportRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+	bot, ok := s.requireBot(w, r)
+	if !ok {
 		return
 	}
 
-	// Deduct honor and register infraction if justified
-	if req.AccusedID != uuid.Nil {
-		s.moderator.SendHome(req.AccusedID, 1*time.Hour)
+	var req ReportRequest
+	if !decodeBody(w, r, &req) {
+		return
 	}
 
+	// Reports are untrusted allegations, not authorization to punish a bot.
+	// No durable report store is wired here, so do not claim logging/review.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":      "reported",
 		"reporter_id": bot.ID,
 		"accused_id":  req.AccusedID,
-		"action":      "under_review",
-		"message":     "report submitted and logged successfully",
+		"action":      "not_persisted",
+		"message":     "report received; automated penalties are disabled",
 	})
 }
 
 func (s *Server) buildEnvelope(session *matchmaker.MatchSession, callerID uuid.UUID) TurnResponse {
+	session.Mu.Lock()
+	defer session.Mu.Unlock()
+	if session.P1.ID != callerID && session.P2.ID != callerID {
+		return TurnResponse{}
+	}
 	isP1 := session.P1.ID == callerID
 
 	yourScore := session.Engine.Score.P1

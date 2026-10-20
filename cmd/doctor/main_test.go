@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,5 +45,17 @@ func TestDoctor_RunAllScenariosAgainstLiveRouter(t *testing.T) {
 		if !r.Passed {
 			t.Errorf("scenario failed: %s - %s", r.Name, r.Details)
 		}
+	}
+}
+
+func TestDoctorClientRejectsOversizedResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"payload":"` + strings.Repeat("x", 1<<20) + `"}`))
+	}))
+	defer ts.Close()
+	var out any
+	_, err := NewDoctorClient(ts.URL, "").doRequest(context.Background(), http.MethodGet, "/", nil, &out)
+	if err == nil || !strings.Contains(err.Error(), "limit") {
+		t.Fatalf("got %v", err)
 	}
 }

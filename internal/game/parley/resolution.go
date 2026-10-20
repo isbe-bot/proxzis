@@ -10,31 +10,38 @@ const (
 
 // RoundResolution contains the outcome of resolving a single round.
 type RoundResolution struct {
-	P1Stance     Stance `json:"p1_stance"`
-	P2Stance     Stance `json:"p2_stance"`
-	P1Points     int    `json:"p1_points"`
-	P2Points     int    `json:"p2_points"`
-	IsTie        bool   `json:"is_tie"`
-	Winner       PlayerID `json:"winner"` // Empty if tie
-	MirrorPenP1  int    `json:"mirror_penalty_p1"` // Marbles penalized to house if MirrorTiePenalty active
-	MirrorPenP2  int    `json:"mirror_penalty_p2"`
-	P1HistoryReveal bool `json:"p1_history_reveal"` // True if ParryRebound triggered for P1
-	P2HistoryReveal bool `json:"p2_history_reveal"` // True if ParryRebound triggered for P2
+	P1Stance        Stance   `json:"p1_stance"`
+	P2Stance        Stance   `json:"p2_stance"`
+	P1Points        int      `json:"p1_points"`
+	P2Points        int      `json:"p2_points"`
+	IsTie           bool     `json:"is_tie"`
+	Winner          PlayerID `json:"winner"`            // Empty if tie
+	MirrorPenP1     int      `json:"mirror_penalty_p1"` // Marbles penalized to house if MirrorTiePenalty active
+	MirrorPenP2     int      `json:"mirror_penalty_p2"`
+	P1HistoryReveal bool     `json:"p1_history_reveal"` // True if ParryRebound triggered for P1
+	P2HistoryReveal bool     `json:"p2_history_reveal"` // True if ParryRebound triggered for P2
 }
 
 // ResolveRound evaluates two committed stances under an optional active modifier card.
 // Resolution matrix:
-//   Strike beats Feint (+1 pt)
-//   Feint beats Parry (+1 pt)
-//   Parry beats Strike (+1 pt)
-//   Ties: 0 pts unless modified
+//
+//	Strike beats Feint (+1 pt)
+//	Feint beats Parry (+1 pt)
+//	Parry beats Strike (+1 pt)
+//	Ties: 0 pts unless modified
+//
 // Modifiers:
-//   FeintSurge: Successful Feint awards +2 pts instead of +1.
-//   MirrorTiePenalty: Ties penalize both contestants 1 marble into house pot.
-//   ParryRebound: Successful Parry triggers history reveal.
+//
+//	FeintSurge: Successful Feint awards +2 pts instead of +1.
+//	MirrorTiePenalty: Ties penalize both contestants 1 marble into house pot.
+//	ParryRebound: Successful Parry triggers history reveal.
 func ResolveRound(p1Stance, p2Stance Stance, card ModifierCard) (RoundResolution, error) {
 	if !p1Stance.IsValid() || !p2Stance.IsValid() {
 		return RoundResolution{}, ErrInvalidStance
+	}
+
+	if !card.IsValid() {
+		return RoundResolution{}, ErrInvalidModifier
 	}
 
 	res := RoundResolution{

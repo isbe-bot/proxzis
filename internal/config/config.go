@@ -19,15 +19,12 @@ type Config struct {
 func Load() *Config {
 	port := 8080
 	if p := os.Getenv("PORT"); p != "" {
-		if val, err := strconv.Atoi(p); err == nil {
+		if val, err := strconv.Atoi(p); err == nil && val > 0 && val <= 65535 {
 			port = val
 		}
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://postgres:postgres@localhost:5432/bottagon?sslmode=disable"
-	}
 
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel == "" {

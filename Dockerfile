@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26.9-alpine3.24 AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bin/doctor ./cmd/doct
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bin/refbot ./cmd/refbot
 
 # Final release stage - hardened alpine
-FROM alpine:3.20
+FROM alpine:3.24
 
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 10001 bottagon \
