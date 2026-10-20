@@ -1,0 +1,37 @@
+# Binaries
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+profile.out
+
+# Go build / dependencies cache
+vendor/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.secrets/
+*.pem
+*.key
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker / Local DB mount data
+.data/
+pgdata/
