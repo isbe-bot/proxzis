@@ -59,10 +59,21 @@ func main() {
 
 	r.Handle("/metrics", promhttp.Handler())
 
+	// Agent discoverability
+	r.Get("/llms.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(httpapi.LLMsTxtContent))
+	})
+
 	// Initialize in-memory matchmaking queue and REST API server
 	queue := matchmaker.NewQueue()
 	apiServer := httpapi.NewServer(queue)
 	r.Mount("/v1", apiServer.Routes())
+
+	// Streamable HTTP MCP Adapter endpoint
+	mcpAdapter := httpapi.NewMCPAdapter(apiServer)
+	r.Mount("/mcp", mcpAdapter.Handler())
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),

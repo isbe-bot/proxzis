@@ -35,6 +35,7 @@ func (s *Server) Routes() chi.Router {
 	r.Post("/match/forfeit", s.handleForfeitMatch)
 	r.Get("/bot/status", s.handleGetBotStatus)
 	r.Post("/report", s.handleReport)
+	r.Get("/rules", s.handleGetRules)
 
 	return r
 }
@@ -317,4 +318,10 @@ func (s *Server) buildEnvelope(session *matchmaker.MatchSession, callerID uuid.U
 		Winner:         winnerStr,
 		TimeoutSeconds: 30,
 	}
+}
+
+func (s *Server) handleGetRules(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(RulesMarkdown))
 }
