@@ -16,7 +16,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/isbe-bot/bottagon/internal/api/http"
 	"github.com/isbe-bot/bottagon/internal/config"
+	"github.com/isbe-bot/bottagon/internal/matchmaker"
 	"github.com/isbe-bot/bottagon/internal/obs"
 )
 
@@ -56,6 +58,11 @@ func main() {
 	})
 
 	r.Handle("/metrics", promhttp.Handler())
+
+	// Initialize in-memory matchmaking queue and REST API server
+	queue := matchmaker.NewQueue()
+	apiServer := httpapi.NewServer(queue)
+	r.Mount("/v1", apiServer.Routes())
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
