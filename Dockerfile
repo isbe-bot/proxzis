@@ -9,7 +9,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bin/proxyd ./cmd/proxyd
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bin/bottagond ./cmd/bottagond
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bin/migrate ./cmd/migrate
 
 # Final stage
@@ -19,10 +19,10 @@ RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
-COPY --from=builder /bin/proxyd /app/proxyd
+COPY --from=builder /bin/bottagond /app/bottagond
 COPY --from=builder /bin/migrate /app/migrate
 COPY migrations /app/migrations
 
 EXPOSE 8080
 
-CMD ["/app/proxyd"]
+CMD ["/app/bottagond"]

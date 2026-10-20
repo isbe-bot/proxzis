@@ -10,8 +10,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	"github.com/isbe-bot/proxzis/internal/config"
-	"github.com/isbe-bot/proxzis/internal/obs"
+	"github.com/isbe-bot/bottagon/internal/config"
+	"github.com/isbe-bot/bottagon/internal/obs"
 )
 
 func main() {

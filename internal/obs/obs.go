@@ -13,7 +13,7 @@ import (
 var (
 	HttpRequestsTotal = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "proxzis_http_requests_total",
+			Name: "bottagon_http_requests_total",
 			Help: "Total count of HTTP requests handled by status code and method.",
 		},
 		[]string{"method", "path", "status"},
@@ -21,7 +21,7 @@ var (
 
 	HttpRequestDurationSeconds = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "proxzis_http_request_duration_seconds",
+			Name:    "bottagon_http_request_duration_seconds",
 			Help:    "Duration of HTTP requests in seconds.",
 			Buckets: prometheus.DefBuckets,
 		},

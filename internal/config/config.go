@@ -26,7 +26,7 @@ func Load() *Config {
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://postgres:postgres@localhost:5432/proxzis?sslmode=disable"
+		dbURL = "postgres://postgres:postgres@localhost:5432/bottagon?sslmode=disable"
 	}
 
 	logLevel := os.Getenv("LOG_LEVEL")

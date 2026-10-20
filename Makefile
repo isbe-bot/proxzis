@@ -1,6 +1,6 @@
 .PHONY: all build run test lint clean docker-up docker-down migrate-up migrate-down
 
-BINARY_NAME=proxyd
+BINARY_NAME=bottagond
 BUILD_DIR=bin
 GO_FILES=$(shell find . -name '*.go')
 
@@ -8,7 +8,7 @@ all: build
 
 build:
 	@mkdir -p $(BUILD_DIR)
-	go build -v -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/proxyd
+	go build -v -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/bottagond
 
 run: build
 	./$(BUILD_DIR)/$(BINARY_NAME)

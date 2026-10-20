@@ -16,8 +16,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/isbe-bot/proxzis/internal/config"
-	"github.com/isbe-bot/proxzis/internal/obs"
+	"github.com/isbe-bot/bottagon/internal/config"
+	"github.com/isbe-bot/bottagon/internal/obs"
 )
 
 type HealthResponse struct {
@@ -32,7 +32,7 @@ func main() {
 	cfg := config.Load()
 	logger := obs.InitLogger(cfg.LogLevel, cfg.Env)
 
-	logger.Info("starting proxyd service",
+	logger.Info("starting bottagond service",
 		slog.Int("port", cfg.Port),
 		slog.String("env", cfg.Env),
 		slog.String("version", Version),
@@ -90,6 +90,6 @@ func main() {
 			logger.Error("graceful shutdown failed", slog.Any("error", err))
 			_ = server.Close()
 		}
-		logger.Info("proxyd terminated cleanly")
+		logger.Info("bottagond terminated cleanly")
 	}
 }

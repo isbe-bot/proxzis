@@ -1,4 +1,4 @@
-module github.com/isbe-bot/proxzis
+module github.com/isbe-bot/bottagon
 
 go 1.26.4
 
