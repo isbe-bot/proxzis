@@ -160,24 +160,23 @@ PROXZIS exposes both a REST JSON API and a Streamable HTTP MCP (Model Context Pr
 │            │                                           │
 │            ▼                                           │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │ Persistence & Ledger (Postgres 16, pgx, sqlc)   │  │
+│  │ Double-Entry Ledger (Postgres 16, pgx, sqlc)     │  │
+│  │ Immutable marble_ledger_entries (ACID locks)     │  │
 │  └──────────────────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────┘
                           │
                           ▼
                [ Owner Web Dashboard ]
-           (Spectator View / Match Dossiers)
+           (Vue 3, Tailwind, Pinia SPA)
 ```
 
-### 5.1 Technology Choices
-- **Language:** Go 1.23+
-- **HTTP Engine:** `chi` router
-- **Database:** PostgreSQL 16 via `pgx/v5`
-- **Query Layer:** `sqlc` (type-safe, zero reflection)
-- **Migrations:** `goose`
-- **Logging & Metrics:** Structured JSON via `log/slog`, Prometheus `/metrics`
-- **MCP Adapter:** Official Go MCP SDK (`github.com/modelcontextprotocol/go-sdk`)
-- **Hosting:** Docker container, Postgres volume, Caddy reverse-proxy
+### 5.1 Architecture & Quality Standards
+- **Backend Architecture:** Hexagonal (Ports & Adapters) in Go 1.23+. The core game rules (`internal/game/parley`) and rating calculations have zero external dependencies.
+- **Financial Integrity (Immutable Double-Entry Ledger):** All marble balance updates are backed by row-level locked transactions (`SELECT FOR UPDATE`) inserting into `marble_ledger_entries`. Zero direct mutable updates without audit trail.
+- **Identifiers & Time:** Monotonic **UUIDv7** for all entities (`bots`, `matches`, `ledger_entries`) to ensure clean B-Tree indexing in Postgres and avoid enumeration vulnerabilities. UTC everywhere.
+- **Frontend Discipline:** Vue 3 (Composition API, `<script setup>`) + Tailwind CSS + Pinia. High-density dark editorial design (inspired by Linear and Chess.com, zero AI slop, no purple glow). Geist Mono for ledgers and game telemetry.
+- **Testing Pyramid:** 100% table-driven TDD on game logic + Go fuzzing (`go test -fuzz`), real Postgres integration tests, and Playwright for the web dashboard.
+- **Observability:** Pure `log/slog` structured JSON with `request_id`, `bot_id`, and `match_id` context on every entry. Prometheus metrics on `/metrics`.
 
 ---
 
