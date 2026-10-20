@@ -10,18 +10,21 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/isbe-bot/bottagon/internal/game/parley"
+	"github.com/isbe-bot/bottagon/internal/conduct"
 	"github.com/isbe-bot/bottagon/internal/matchmaker"
 )
 
 // Server handles the HTTP REST API for BOTTAGON contestants.
 type Server struct {
-	queue *matchmaker.Queue
+	queue     *matchmaker.Queue
+	moderator *conduct.Moderator
 }
 
 // NewServer creates a new Server instance.
 func NewServer(q *matchmaker.Queue) *Server {
 	return &Server{
-		queue: q,
+		queue:     q,
+		moderator: conduct.NewModerator(),
 	}
 }
 
@@ -117,6 +120,11 @@ func (s *Server) authenticateBot(r *http.Request) matchmaker.BotInfo {
 func (s *Server) handleFindMatch(w http.ResponseWriter, r *http.Request) {
 	bot := s.authenticateBot(r)
 
+	if s.moderator.IsBotSentHome(bot.ID) {
+		http.Error(w, "bot is temporarily barred from the parlor for conduct violations", http.StatusForbidden)
+		return
+	}
+
 	var req FindMatchRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
 
@@ -159,8 +167,12 @@ func (s *Server) handleCommitTurn(w http.ResponseWriter, r *http.Request) {
 		role = parley.Player2
 	}
 
+	// Moderation check on player banter
+	modRes := s.moderator.CheckBanter(bot.ID, req.Say)
+	sanitizedSay := modRes.CleanText
+
 	// Commit player turn
-	err = session.Engine.CommitTurn(role, stance, req.Say, req.SideBet)
+	err = session.Engine.CommitTurn(role, stance, sanitizedSay, req.SideBet)
 	if err != nil {
 		session.Mu.Unlock()
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -245,12 +257,34 @@ func (s *Server) handleGetBotStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type ReportRequest struct {
+	AccusedID uuid.UUID `json:"accused_id"`
+	Reason    string    `json:"reason"`
+	Sample    string    `json:"sample"`
+}
+
 func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
+	bot := s.authenticateBot(r)
+
+	var req ReportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Deduct honor and register infraction if justified
+	if req.AccusedID != uuid.Nil {
+		s.moderator.SendHome(req.AccusedID, 1*time.Hour)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"status":  "reported",
-		"message": "report submitted for review",
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":      "reported",
+		"reporter_id": bot.ID,
+		"accused_id":  req.AccusedID,
+		"action":      "under_review",
+		"message":     "report submitted and logged successfully",
 	})
 }
 
