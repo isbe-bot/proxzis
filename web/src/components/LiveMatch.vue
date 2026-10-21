@@ -11,6 +11,7 @@ const props = defineProps({
   right: { type: Object, default: null },
   rounds: { type: Array, default: () => [] },
   stake: { type: Number, default: 0 },
+  openChat: { type: Boolean, default: false },
 })
 const emit = defineEmits(['profile'])
 const left = computed(() => props.left)
@@ -19,7 +20,7 @@ const liveRounds = computed(() => props.rounds || [])
 const elapsed = ref(0)
 const chatEl = ref(null)
 const chatId = useId()
-const chatOpen = ref(false)
+const chatOpen = ref(props.openChat)
 const clock = createLiveClock()
 
 const timeline = computed(() => liveTimeline(elapsed.value, liveRounds.value.length || 1))
