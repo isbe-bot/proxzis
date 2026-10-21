@@ -6,7 +6,7 @@ const rigB = new StudioRig(0xef4444, false);
 
 rigA.pose('ON_GUARD');
 const snapA = rigA.snapshot();
-rigA.pose('STRIKE');
+rigA.pose('ROCK');
 const snapB = rigA.snapshot();
 
 console.log("lerp start");

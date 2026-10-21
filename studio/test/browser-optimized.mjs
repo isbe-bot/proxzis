@@ -15,7 +15,7 @@ try {
   await page.waitForFunction(()=>window.studioDiagnostics?.().drawCalls>0);
   for(const preset of ['god','broadcast']) {
     await page.click(`[data-camera="${preset}"]`);
-    await page.selectOption('#parry-line','PARRY');
+    await page.selectOption('#guard-line','PAPER');
     const before=await page.evaluate(()=>studioDiagnostics());
     assert.deepEqual([before.capture.width,before.capture.height],[720,660]);
     await page.locator('#canvas3d').screenshot({path:`${proofDir}/${preset}-guard.png`});
@@ -28,7 +28,7 @@ try {
       const sample=()=>{
         const d=studioDiagnostics(),p=window.optimizedProof,b=p.baseline;
         if(d.batch) {
-          if(d.camera!==b.camera||d.parry!==b.parry||d.orbit.zoom!==b.orbit.zoom||!d.orbit.locked||d.orbit.enabled||Math.hypot(...d.cameraPosition.map((v,i)=>v-b.cameraPosition[i]))>1e-6)p.violations.push(d.cameraPosition);
+          if(d.camera!==b.camera||d.guardLine!==b.guardLine||d.orbit.zoom!==b.orbit.zoom||!d.orbit.locked||d.orbit.enabled||Math.hypot(...d.cameraPosition.map((v,i)=>v-b.cameraPosition[i]))>1e-6)p.violations.push(d.cameraPosition);
           if(d.engagementPhase==='OUTCOME'&&d.result.settled&&p.start===null) {
             p.start=d.capture.time;
             p.outcomes[d.stances.join('/')]=d.result.winner;

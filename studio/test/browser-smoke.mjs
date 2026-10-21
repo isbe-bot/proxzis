@@ -10,7 +10,7 @@ const errors=[];
 page.on('pageerror',e=>errors.push(e.message));
 page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
 page.on('response',r=>{if(r.status()>=400)errors.push(`${r.status()} ${r.url()}`);});
-const wins=(a,b)=>(a==='STRIKE'&&b==='FEINT')||(a==='FEINT'&&b==='PARRY')||(a==='PARRY'&&b==='STRIKE');
+const wins=(a,b)=>(a==='ROCK'&&b==='SCISSORS')||(a==='SCISSORS'&&b==='PAPER')||(a==='PAPER'&&b==='ROCK');
 try {
  await page.goto(process.env.STUDIO_URL || 'https://jediui.com/studio/',{waitUntil:'networkidle'});
  await page.waitForFunction(()=>window.studioDiagnostics?.().drawCalls>0);
@@ -56,7 +56,7 @@ try {
  await page.screenshot({path:'/tmp/studio-broadcast-guard.png'});
  await page.click('[data-camera="god"]');
  const cases=[];
- for(const a of ['STRIKE','FEINT','PARRY'])for(const b of ['STRIKE','FEINT','PARRY']){
+ for(const a of ['ROCK','SCISSORS','PAPER'])for(const b of ['ROCK','SCISSORS','PAPER']){
   await page.click(`#botA-btns [data-stance="${a}"]`);await page.click(`#botB-btns [data-stance="${b}"]`);
   assert.equal((await page.evaluate(()=>studioDiagnostics())).viewportTextSprites,0);
   // A Playwright click can wait through brief phases on a contended software GPU.
@@ -74,7 +74,7 @@ try {
   });
   await page.waitForFunction(()=>studioDiagnostics().engagementPhase==='SALUTE');
   assert.equal((await page.evaluate(()=>studioDiagnostics())).viewportTextSprites,0);
-  if(a!=='FEINT'||b!=='FEINT'){
+  if(a!=='SCISSORS'||b!=='SCISSORS'){
   await page.waitForFunction(()=>studioDiagnostics().contact.visible&&studioDiagnostics().contact.life>0.25);
   const contact=await page.evaluate(()=>studioDiagnostics().contact);
   assert.equal(contact.particles,48);
@@ -82,7 +82,7 @@ try {
   assert.ok(contact.light<=3);
   assert.equal(contact.streaks,true);
   assert.ok(contact.light>0);
-  if(a==='STRIKE'&&b==='STRIKE')await page.screenshot({path:'/tmp/studio-contact-burst.png'});
+  if(a==='ROCK'&&b==='ROCK')await page.screenshot({path:'/tmp/studio-contact-burst.png'});
   const measured=await page.evaluate(()=>studioDiagnostics().contact.measured);
   assert.ok(measured.distance<1e-5,`${a}/${b}: actual contact gap ${measured.distance}`);
   }
@@ -114,7 +114,7 @@ try {
   });
   assert.ok(distance(d.rigs[0].facing,d.rigs[1].facing)<1e-6);
   assert.equal(d.sceneryMeshes,0);
-  if((a==='STRIKE'&&b==='PARRY')||(a==='STRIKE'&&b==='FEINT')||a===b&&a==='STRIKE'){
+  if((a==='ROCK'&&b==='PAPER')||(a==='ROCK'&&b==='SCISSORS')||a===b&&a==='ROCK'){
     await page.screenshot({path:`/tmp/studio-result-${winner??'tie'}.png`});
   }
   // Slow software-GPU screenshots may finish after the 425 ms recovery.
@@ -131,7 +131,7 @@ try {
    assert.ok(Math.abs(rig.facing[0]-(i?-1:1))<1e-8);
    assert.ok(rig.bladeTip[1]>rig.bladeBase[1]);
   });
-  if(a==='STRIKE'&&b==='FEINT')await page.screenshot({path:'/tmp/studio-returned-guard.png'});
+  if(a==='ROCK'&&b==='SCISSORS')await page.screenshot({path:'/tmp/studio-returned-guard.png'});
   const frames=await page.evaluate(()=>window.frameProof);
   for(const [phase,frame] of Object.entries(frames)) {
     await writeFile(`${proofDir}/${a.toLowerCase()}-${b.toLowerCase()}-${phase}.png`,Buffer.from(frame.image.split(',')[1],'base64'));
@@ -143,7 +143,7 @@ try {
  await page.click('#btn-idle');
  assert.equal((await page.evaluate(()=>studioDiagnostics())).result.active,false);
  // Capture an actual clip, not just a DOM screenshot.
- await page.click('#botA-btns [data-stance="STRIKE"]');await page.click('#botB-btns [data-stance="FEINT"]');
+ await page.click('#botA-btns [data-stance="ROCK"]');await page.click('#botB-btns [data-stance="SCISSORS"]');
  await page.click('#btn-record-one');
  await page.waitForFunction(()=>document.querySelector('#clip-downloads a'),{},{timeout:180000});
  const clip=await page.evaluate(async()=>{const a=document.querySelector('#clip-downloads a');const b=await(await fetch(a.href)).blob();return {name:a.download,bytes:b.size,type:b.type};});
@@ -165,10 +165,10 @@ try {
  // Two actual nine-clip exports preserve both projection types, manual orbit/zoom,
  // non-default parries and original stance selection throughout every clip.
  const batchRuns=[];
- for (const [preset,parry] of [['god','PARRY_QUARTE'],['broadcast','PARRY_PRIME']]) {
+ for (const [preset,guardLine] of [['god','PAPER_QUARTE'],['broadcast','PAPER_PRIME']]) {
   await page.waitForFunction(()=>!studioDiagnostics().busy);
   await page.click(`[data-camera="${preset}"]`);
-  await page.selectOption('#parry-line',parry);
+  await page.selectOption('#guard-line',guardLine);
   const box=await page.locator('#canvas3d').boundingBox();
   const x=box.x+box.width/2,y=box.y+box.height/2;
   await page.mouse.move(x,y);await page.mouse.down();
@@ -176,19 +176,19 @@ try {
   await page.mouse.wheel(0,-120);await page.waitForTimeout(1200);
   await page.evaluate(()=>{
    const d=studioDiagnostics();
-   window.batchProof={before:d,violations:[],contacts:{},clips:{},parryPoses:[],holds:[],outcomeStart:null};
+   window.batchProof={before:d,violations:[],contacts:{},clips:{},guardPoses:[],holds:[],outcomeStart:null};
    // Baseline at the actual click, not before Playwright's actionability wait.
    document.querySelector('#btn-batch-export').addEventListener('click',()=>{window.batchProof.before=studioDiagnostics();},{capture:true,once:true});
    window.batchProofTimer=setInterval(()=>{
     const d=studioDiagnostics(),p=window.batchProof;
     if(!d.batch)return;
-    const changed=d.camera!==p.before.camera||d.parry!==p.before.parry||
+    const changed=d.camera!==p.before.camera||d.guardLine!==p.before.guardLine||
      Math.hypot(...d.cameraPosition.map((v,i)=>v-p.before.cameraPosition[i]))>0.0001||
      d.orbit.zoom!==p.before.orbit.zoom||d.orbit.enabled||!d.orbit.locked;
-    if(changed&&p.violations.length<3)p.violations.push({position:d.cameraPosition,baseline:p.before.cameraPosition,camera:d.camera,parry:d.parry,zoom:d.orbit.zoom,locked:d.orbit.locked,enabled:d.orbit.enabled});
-    p.clips[d.stances.join('/')]=d.parry;
+    if(changed&&p.violations.length<3)p.violations.push({position:d.cameraPosition,baseline:p.before.cameraPosition,camera:d.camera,guardLine:d.guardLine,zoom:d.orbit.zoom,locked:d.orbit.locked,enabled:d.orbit.enabled});
+    p.clips[d.stances.join('/')]=d.guardLine;
     if(d.engagementPhase==='CLASH'&&d.contact.measured)p.contacts[d.stances.join('/')]=d.contact.measured;
-    d.rigs.forEach(rig=>{if(rig.pose.startsWith('PARRY')&&!p.parryPoses.includes(rig.pose))p.parryPoses.push(rig.pose);});
+    d.rigs.forEach(rig=>{if(rig.pose.startsWith('PAPER')&&!p.guardPoses.includes(rig.pose))p.guardPoses.push(rig.pose);});
     if(d.engagementPhase==='OUTCOME'&&d.result.settled&&p.outcomeStart===null)p.outcomeStart=d.capture.time;
     if(d.engagementPhase==='RECOVER'&&p.outcomeStart!==null){p.holds.push(d.capture.time-p.outcomeStart);p.outcomeStart=null;}
    },20);
@@ -196,23 +196,23 @@ try {
   const count=await page.locator('#clip-downloads a').count();
   await page.click('#btn-batch-export');
   assert.equal(await page.locator('[data-camera]:disabled').count(),6);
-  assert.equal(await page.locator('#parry-line').isDisabled(),true);
+  assert.equal(await page.locator('#guard-line').isDisabled(),true);
   // Even synthetic preset events and real orbit/zoom gestures cannot alter capture.
   await page.evaluate(()=>document.querySelector('[data-camera="close"]').dispatchEvent(new MouseEvent('click')));
   await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+90,y+30,{steps:4});await page.mouse.up();
   await page.mouse.wheel(0,300);
   await page.waitForFunction(count=>!studioDiagnostics().busy&&document.querySelectorAll('#clip-downloads a').length===count+9,count,{timeout:1800000});
   const proof=await page.evaluate(()=>{clearInterval(window.batchProofTimer);return {...window.batchProof,after:studioDiagnostics()};});
-  assert.deepEqual(proof.violations,[],`${preset}: frozen camera/parry throughout capture`);
+  assert.deepEqual(proof.violations,[],`${preset}: frozen camera/guard line throughout capture`);
   assert.equal(Object.keys(proof.clips).length,9);
   assert.equal(Object.keys(proof.contacts).length,9);
   Object.values(proof.contacts).forEach(contact=>assert.ok(contact.kind==='read'||contact.distance<1e-5));
-  assert.deepEqual(proof.parryPoses,[parry],'Actual authored parry pose must match the selected variant');
-  assert.ok(Object.values(proof.clips).every(p=>p===parry));
+  assert.deepEqual(proof.guardPoses,[guardLine],'Actual authored guard pose must match the selected variant');
+  assert.ok(Object.values(proof.clips).every(p=>p===guardLine));
   assert.equal(proof.holds.length,9);
   proof.holds.forEach(ms=>assert.ok(ms>=420&&ms<550,`Outcome hold ${ms}ms`));
   assert.deepEqual(proof.after.stances,proof.before.stances);
-  assert.equal(proof.after.parry,parry);
+  assert.equal(proof.after.guardLine,guardLine);
   assert.equal(proof.after.orbit.enabled,true);
   assert.ok(distance(proof.after.cameraPosition,proof.before.cameraPosition)<0.0001,'No stale inertia resumes after export');
   proof.after.rigs.forEach(rig=>assert.equal(rig.pose,'ON_GUARD'));
@@ -234,7 +234,7 @@ try {
     assert.ok(recording.decoded.width>0 && recording.decoded.height>0 && recording.decoded.ready>=2);
     await writeFile(`${proofDir}/${preset}-${recording.name}`, Buffer.from(recording.data,'base64'));
   }
-  batchRuns.push({preset,parry,decoded:recordings.map(({name,decoded})=>({name,...decoded})),parryPoses:proof.parryPoses,holds:proof.holds,clips,violations:proof.violations,cameraPosition:proof.after.cameraPosition,zoom:proof.after.orbit.zoom});
+  batchRuns.push({preset,guardLine,decoded:recordings.map(({name,decoded})=>({name,...decoded})),guardPoses:proof.guardPoses,holds:proof.holds,clips,violations:proof.violations,cameraPosition:proof.after.cameraPosition,zoom:proof.after.orbit.zoom});
  }
  // Exercise responsive camera selection and playback.
  await page.setViewportSize({width:390,height:844});

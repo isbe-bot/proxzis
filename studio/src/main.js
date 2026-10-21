@@ -50,12 +50,12 @@ const rigs = [botA, botB];
 const roundResult = new RoundResult(scene, rigs);
 function clearResult() { roundResult.clear(); }
 function showResult(winner) { return roundResult.show(winner, camera); }
-let currentStanceA = 'STRIKE', currentStanceB = 'PARRY';
+let currentStanceA = 'ROCK', currentStanceB = 'PAPER';
 let isAnimating = false, busy = false, batch = false, idle = true;
 let frameRecording = null;
 const timelineNow = () => frameRecording ? frameRecording.time : performance.now();
 let shake = 0, trailActive = false, bladeRebound = 0;
-const parrySelect = document.getElementById('parry-line');
+const guardSelect = document.getElementById('guard-line');
 const status = document.getElementById('status-log');
 const playBtn = document.getElementById('btn-play');
 const recordBtn = document.getElementById('btn-record-one');
@@ -86,7 +86,7 @@ function lockControls(value) {
   busy = value;
   // Freeze the actual orbit/zoom, not a preset. Do not advance damping while locked.
   cameraRig.setLocked(value);
-  for (const button of [...stanceButtons, playBtn, idleBtn, recordBtn, batchBtn, parrySelect, ...cameraButtons]) button.disabled = value;
+  for (const button of [...stanceButtons, playBtn, idleBtn, recordBtn, batchBtn, guardSelect, ...cameraButtons]) button.disabled = value;
   if (!value) resize();
 }
 function updateButtons(preview = true) {
@@ -96,8 +96,8 @@ function updateButtons(preview = true) {
   if (preview) {
     clearResult();
     idle = false;
-    const preview = buildEngagement(rigs, [currentStanceA, currentStanceB], parrySelect.value);
-    const snapshots = preview.winner !== null && [currentStanceA, currentStanceB][preview.winner] === 'FEINT' ? preview.action : preview.contact;
+    const preview = buildEngagement(rigs, [currentStanceA, currentStanceB], guardSelect.value);
+    const snapshots = preview.winner !== null && [currentStanceA, currentStanceB][preview.winner] === 'SCISSORS' ? preview.action : preview.contact;
     rigs.forEach((rig, i) => rig.applyInterpolation(snapshots[i], snapshots[i], 1));
     clearTrails();
   }
@@ -108,7 +108,7 @@ stanceButtons.forEach(button => button.addEventListener('click', () => {
   else currentStanceB = button.dataset.stance;
   updateButtons();
 }));
-parrySelect.addEventListener('change', () => updateButtons());
+guardSelect.addEventListener('change', () => updateButtons());
 updateButtons(false);
 
 // Fixed-size ribbon buffers. All coordinates are world-space; no per-frame
@@ -172,7 +172,7 @@ function tween(from, to, duration, easing = ease.smooth, disengage = false, driv
         rigs.forEach((rig, i) => {
           const alpha = easing(t);
           applyCombatFrame(rig, from[i], to[i], t, alpha, {
-            disengage: disengage && [currentStanceA, currentStanceB][i] === 'FEINT', drive,
+            disengage: disengage && [currentStanceA, currentStanceB][i] === 'SCISSORS', drive,
           });
         });
         if (t < 1) requestAnimationFrame(step); else resolve();
@@ -182,25 +182,25 @@ function tween(from, to, duration, easing = ease.smooth, disengage = false, driv
   });
 }
 const hold = ms => frameRecording ? frameRecording.hold(ms) : new Promise(resolve => setTimeout(resolve, ms));
-async function playSequence(a, b, parry = parrySelect.value) {
+async function playSequence(a, b, guardLine = guardSelect.value) {
   if (isAnimating) return;
   isAnimating = true;
   clearResult();
   idle = false;
   try {
     const stances = [a, b];
-    const capture = types => rigs.map((rig, i) => rig.capture(types[i] === 'PARRY' ? parry : types[i]));
+    const capture = types => rigs.map((rig, i) => rig.capture(types[i] === 'PAPER' ? guardLine : types[i]));
     const guard = capture(['ON_GUARD', 'ON_GUARD']);
     const salute = capture(['SALUTE', 'SALUTE']);
-    const windup = capture(stances.map(s => s === 'STRIKE' ? 'WINDUP' : 'ON_GUARD'));
-    const engagement = buildEngagement(rigs, stances, parry);
+    const windup = capture(stances.map(s => s === 'ROCK' ? 'WINDUP' : 'ON_GUARD'));
+    const engagement = buildEngagement(rigs, stances, guardLine);
     const { action, contact, winner } = engagement;
     const tie = winner === null;
-    const hasFeint = stances.includes('FEINT');
-    const counter = !tie && stances[winner] === 'FEINT';
-    // Never visit an unopposed full strike before its defensive interception.
-    const bait = capture(stances.map(s => s === 'FEINT' ? 'FEINT_EXTEND' : s === 'STRIKE' ? 'WINDUP' : 'PARRY'));
-    const reactions = stances.map((s, i) => tie ? 'DEFLECT_REACT' : i === winner ? (s === 'PARRY' ? 'PARRY' : 'ON_GUARD') : stances[winner] === 'PARRY' ? 'DEFLECT_REACT' : 'HIT_REACT');
+    const hasScissors = stances.includes('SCISSORS');
+    const counter = !tie && stances[winner] === 'SCISSORS';
+    // Never visit an unopposed full thrust before its defensive interception.
+    const bait = capture(stances.map(s => s === 'SCISSORS' ? 'SCISSORS_EXTEND' : s === 'ROCK' ? 'WINDUP' : 'PAPER'));
+    const reactions = stances.map((s, i) => tie ? 'DEFLECT_REACT' : i === winner ? (s === 'PAPER' ? 'PAPER' : 'ON_GUARD') : stances[winner] === 'PAPER' ? 'DEFLECT_REACT' : 'HIT_REACT');
     const react = capture(reactions);
     // Withdraw the point from the jacket while the struck torso recoils.
     if (engagement.kind === 'body') {
@@ -223,7 +223,7 @@ async function playSequence(a, b, parry = parrySelect.value) {
     cue('ENGAGE');
     await tween(guard, windup, 130, ease.out);
     trailActive = true;
-    if (hasFeint) {
+    if (hasScissors) {
       await tween(windup, bait, 190, ease.out);
       await tween(bait, counter || tie ? action : contact, 185, counter || tie ? ease.smooth : ease.in, true, !counter && !tie);
       if (counter) {
@@ -231,13 +231,13 @@ async function playSequence(a, b, parry = parrySelect.value) {
         await tween(action, contact, 185, ease.in, true, true);
       }
     } else {
-      await tween(windup, contact, tie && a === 'PARRY' ? 360 : 230, tie && a === 'PARRY' ? ease.smooth : ease.in, false, a === 'STRIKE' || b === 'STRIKE');
+      await tween(windup, contact, tie && a === 'PAPER' ? 360 : 230, tie && a === 'PAPER' ? ease.smooth : ease.in, false, a === 'ROCK' || b === 'ROCK');
     }
     cue('CLASH');
     trailActive = false;
-    const mutualRead = tie && a !== 'STRIKE';
+    const mutualRead = tie && a !== 'ROCK';
     impact(engagement);
-    log(tie ? (mutualRead ? 'MUTUAL READ · NO COMMIT' : 'CLASH · MUTUAL REBOUND') : `${winner === 0 ? FIGHTER_NAMES[0] : FIGHTER_NAMES[1]} · ${stances[winner] === 'PARRY' ? 'BLADE DEFLECTION' : 'CONFIRMED HIT'}`);
+    log(tie ? (mutualRead ? 'MUTUAL READ · NO COMMIT' : 'CLASH · MUTUAL REBOUND') : `${winner === 0 ? FIGHTER_NAMES[0] : FIGHTER_NAMES[1]} · ${stances[winner] === 'PAPER' ? 'BLADE DEFLECTION' : 'CONFIRMED HIT'}`);
     // Hold exact contact geometry before any elastic blade recoil.
     await hold(55);
     bladeRebound = engagement.kind === 'blade' ? 0.065 : 0.025;
@@ -288,13 +288,13 @@ function addDownload(filename, blob) {
   item.append(label, link);
   document.getElementById('clip-downloads').prepend(item);
 }
-async function recordMatchup(a, b, parry = parrySelect.value) {
+async function recordMatchup(a, b, guardLine = guardSelect.value) {
   if (await FrameRecording.supported(canvas.width, canvas.height)) {
     const recording = new FrameRecording(canvas.width, canvas.height);
     frameRecording = recording;
     recordBtn.classList.add('recording');
     try {
-      await playSequence(a, b, parry);
+      await playSequence(a, b, guardLine);
       await hold(CAPTURE.drainMs);
       frameRecording = null;
       const blob = await recording.finish();
@@ -325,7 +325,7 @@ async function recordMatchup(a, b, parry = parrySelect.value) {
     stopped.catch(() => {});
     recordBtn.classList.add('recording');
     recorder.start();
-    await playSequence(a, b, parry);
+    await playSequence(a, b, guardLine);
     // Submit the exact final guard, then allow a few capture ticks to drain.
     // The bounded buffer no longer needs the old 1.2-second software-GPU tail.
     renderer.render(scene, camera);
@@ -355,14 +355,14 @@ recordBtn.addEventListener('click', async () => {
 batchBtn.addEventListener('click', async () => {
   if (busy) return;
   const selectedStances = [currentStanceA, currentStanceB];
-  const selectedParry = parrySelect.value;
+  const selectedGuard = guardSelect.value;
   batch = true;
   lockControls(true);
   try {
-    for (const a of ['STRIKE', 'FEINT', 'PARRY']) for (const b of ['STRIKE', 'FEINT', 'PARRY']) {
+    for (const a of ['ROCK', 'SCISSORS', 'PAPER']) for (const b of ['ROCK', 'SCISSORS', 'PAPER']) {
       currentStanceA = a; currentStanceB = b;
       updateButtons(false);
-      await recordMatchup(a, b, selectedParry);
+      await recordMatchup(a, b, selectedGuard);
     }
     log('BATCH COMPLETE · ALL 9 WEBM CLIPS READY');
   } catch (error) { log(`Batch stopped: ${error.message}`); console.error(error); }
@@ -431,7 +431,7 @@ window.studioDiagnostics = () => ({
   orbit: { locked: !!cameraRig.locked, enabled: cameraRig.controls.enabled, target: cameraRig.controls.target.toArray(), zoom: camera.zoom },
   cameraPosition: camera.position.toArray(),
   sceneryMeshes: scene.children.filter(object => object.isMesh && !trails.some(trail => trail.mesh === object)).length,
-  stances: [currentStanceA, currentStanceB], parry: parrySelect.value,
+  stances: [currentStanceA, currentStanceB], guardLine: guardSelect.value,
   capture: { width: canvas.width, height: canvas.height, fps: CAPTURE.fps, bitrate: CAPTURE.bitrate,
     deterministic: !!frameRecording, frame: frameRecording?.frame ?? null, time: timelineNow() },
   drawCalls: renderer.info.render.calls,

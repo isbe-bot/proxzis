@@ -87,8 +87,8 @@ Ankle height remains 0.075. Thigh + shin reach is 1.08.
 
 **ON_GUARD:** bent knees, rear elbow below the shoulder, relaxed rear hand, and
 high sixte/tierce point at mask/face level instead of horizontally at the chest.
-Other authored poses: SALUTE, WINDUP, STRIKE, FOLLOW_THROUGH, PARRY (Sixte),
-PARRY_QUARTE, PARRY_PRIME, FEINT_EXTEND, FEINT, HIT_REACT, DEFLECT_REACT, VICTORY, DEFEAT, ATTENTION.
+Other authored poses: SALUTE, WINDUP, ROCK, FOLLOW_THROUGH, PAPER (Sixte),
+PAPER_QUARTE, PAPER_PRIME, SCISSORS_EXTEND, SCISSORS, HIT_REACT, DEFLECT_REACT, VICTORY, DEFEAT, ATTENTION.
 `aimWeapon()` aligns the blade independently of the arm chain.
 
 ## Playback / export
@@ -97,7 +97,7 @@ Playback, single WebM recording, and all-nine batch export share one timeline:
 
 1. Raise both swords into a physical salute (420 ms), hold (380 ms).
 2. Return to high guard (300 ms), hold (180 ms).
-3. Point-first windup, extension, optional feint disengage/riposte.
+3. Point-first windup, extension, optional Scissors disengage and renewed attack.
 4. Resolve the game outcome with blade sparks/recoil.
 5. Turn/reposition both bots side by side facing the camera into victory/defeat
    poses, or shared attention/salute for ties (850 ms transition, 450 ms hold).
@@ -118,7 +118,7 @@ velocity spread. GPU buffers and
 materials are reused across all contacts; no textures or external assets.
 
 All controls and camera orbit/zoom lock during execution. Batch export snapshots
-the selected parry line once and passes it explicitly to all nine timelines. It
+the selected guard line once and passes it explicitly to all nine timelines. It
 never selects a camera preset or resets camera position/target/zoom. Original
 stance selections are restored after the batch, including on failure. Unlock
 rebinds OrbitControls to the same camera/target/zoom, discarding stale drag
@@ -166,7 +166,7 @@ a Vite dev-server smoke run: HMR resets page/recording state during the suite.
   and camera/damping freeze plus inertia-free unlock. No result lighting/beam objects may exist in the scene.
 - Browser smoke: all nine outcomes, six presets, real mouse drag/wheel, mobile
   touch orbit/pinch, single WebM capture/decode/download, and two complete nine-clip batches (manually orbited/zoomed God View +
-  Quarte and Broadcast + Prime). Monitors every clip for camera/parry lock,
+  Quarte and Broadcast + Prime). Monitors every clip for camera/guard lock,
   blocked camera interaction, ~450 ms logical outcome hold, guard recovery and restored
   stance selection. Fails on console errors, page exceptions, or HTTP errors.
 - Screenshots: `/tmp/studio-god-guard.png`, `/tmp/studio-result-{0,1,tie}.png`,
@@ -251,7 +251,7 @@ SHA-256: `45a598ce13ab97aae4d57c2353cedc163e5d3f6e65b34c7f3dbe05b813444b81`.
   192 → 48; lifetime 820 → 460 ms; peak contact light 65 → 3; smaller flare,
   shorter streaks, tighter spread and 5 px maximum points.
 - Exact manually orbited/zoomed camera is frozen, without preset reset. Camera
-  buttons, gestures and parry selection lock for the full export. Snapshot parry
+  buttons, gestures and guard selection lock for the full export. Snapshot guard
   is passed to every clip; original stance choices return afterward. Fresh
   controls discard stale drag inertia on unlock without changing the view.
 - **30/30 unit tests**, production build and full live Chromium suite pass.
@@ -260,8 +260,8 @@ SHA-256: `45a598ce13ab97aae4d57c2353cedc163e5d3f6e65b34c7f3dbe05b813444b81`.
   bytes**. Its final guard frame was decoded with ffmpeg for visual inspection.
 - **18 real batch clips**: God View + manual orbit/zoom + Quarte (357,311–481,958
   bytes), and Broadcast + manual orbit/zoom + Prime (402,220–600,015 bytes).
-  Actual authored parry poses matched the selected variants. Every clip retained
-  camera/parry; camera interaction was blocked. No camera drift after unlock.
+  Actual authored Paper poses matched the selected guard variants. Every clip retained
+  camera/guard; camera interaction was blocked. No camera drift after unlock.
 - All 18 side-by-side outcome holds measured **797.5–820.3 ms**, followed by
   smooth recovery and final ON_GUARD. Console/page/HTTP errors: **0**.
 - Existing Vite >500 kB chunk advisory only; no build failure.
@@ -285,15 +285,15 @@ by an approximate spark. `src/combat.js` is shared by playback and collision tes
   cores, minimal shoes, camera controls and no-ground/no-spotlight presentation remain.
 - Weapon-arm two-bone IK preserves the 0.39/0.38 arm lengths. Its elbow plane
   minimizes wrist deviation; contact poses are tested below 75° of forearm/blade
-  deviation, rather than allowing the previous reversed/hyperflexed parry wrist.
-- Parry contact is on the defender's **23% forte** and incoming **70% foible**.
+  deviation, rather than allowing the previous reversed/hyperflexed guard wrist.
+- Paper contact is on the defender's **23% forte** and incoming **70% foible**.
   Sixte, quarte and prime each have an explicit interception line. The incoming
   point stops short of the jacket; low parries route around the weapon arm.
-- Committed hits raycast the actual recessed jacket/core surface. A feint first
-  draws a false parry, disengages outside the arm, then renews its thrust. The
+- Committed hits raycast the actual recessed jacket/core surface. Scissors first
+  draws a false Paper guard, disengages outside the arm, then renews its attack. The
   false defensive hand moves offline, so the hit does not pass through a forearm.
-- Strike/strike uses an actual crossed-blade contact; parry/parry a measured
-  tip probe; feint/feint has hesitation with **no invented collision or sparks**.
+- Rock/Rock uses an actual crossed-blade contact; Paper/Paper a measured
+  tip probe; Scissors/Scissors has hesitation with **no invented collision or sparks**.
 - Snapshot interpolation resolves one group-local weapon aim independently of
   shoulder/elbow/wrist quaternion blending, avoiding thigh/forearm sword sweeps.
 - Hip drive leads the point extension slightly; traveling feet lift modestly
@@ -308,14 +308,14 @@ by an approximate spark. `src/combat.js` is shared by playback and collision tes
 
 ### Verification
 
-`npm test` includes all nine matchups in all three parry variants, 240 samples
+`npm test` includes all nine matchups in all three guard variants, 240 samples
 per combat transition, both full body meshes, recoil, result transitions and guard
 recovery (over 600,000 blade-segment samples). No unintended self/opponent body
 intersection is allowed. The intended rounded 9 mm tip touching its target jacket
 at the first recoil sample is contact, not an unintended body crossing.
 
 The browser suite exercises all nine default outcomes plus all nine recordings
-in both alternate parry variants, camera lock, desktop mouse/mobile touch controls,
+in both alternate guard variants, camera lock, desktop mouse/mobile touch controls,
 result holds and exact on-guard restoration. Every batch clip is saved and must
 **decode and seek**, not merely have nonzero bytes. Set `PROOF_DIR` to retain all
 WebMs and the contact/outcome PNGs plus numerical diagnostics:
@@ -347,7 +347,7 @@ orthographic envelope. Conservative mesh-bound sweeps sample **128,100
 view-frames** through all 27 choreographies, outcomes and recovery at five
 aspects. Full swords, helmets and soles retain at least 2.45% edge clearance.
 
-Regenerate the 18 default-parry God/Broadcast master clips:
+Regenerate the 18 default-guard God/Broadcast master clips:
 
 ```sh
 PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
@@ -358,7 +358,7 @@ PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs node test/browser-replays.mjs
 ```
 
 The optimized suite checks HiDPI buffer limits, both actual nine-clip batches,
-camera/parry locks, each logical outcome hold, final on-guard restoration, browser
+camera/guard locks, each logical outcome hold, final on-guard restoration, browser
 decode/seek, and console/page/HTTP errors. `EXPECT_FPS=30` additionally verifies
 **every decoded timestamp interval**, dimensions and size bounds, rather than
 trusting WebM FPS metadata. Export may take several minutes on this VPS's

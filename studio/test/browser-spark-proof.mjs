@@ -15,9 +15,9 @@ try {
   await page.goto(process.env.STUDIO_URL || 'https://jediui.com/studio/', { waitUntil: 'networkidle' });
   const results = [];
   for (const [a, b, winner, tint] of [
-    ['STRIKE', 'FEINT', 0, 0x0044ff],
-    ['STRIKE', 'PARRY', 1, 0x990000],
-    ['STRIKE', 'STRIKE', null, 0xffdf9e],
+    ['ROCK', 'SCISSORS', 0, 0x0044ff],
+    ['ROCK', 'PAPER', 1, 0x990000],
+    ['ROCK', 'ROCK', null, 0xffdf9e],
   ]) {
     await page.click(`#botA-btns [data-stance="${a}"]`);
     await page.click(`#botB-btns [data-stance="${b}"]`);

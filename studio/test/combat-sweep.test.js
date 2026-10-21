@@ -35,18 +35,18 @@ const out = t => 1-(1-t)**3;
 test('all 27 combat timelines keep blades outside both fighters, including outcome recovery', () => {
   const rigs = setup(), meshes = rigs.map(bodyMeshes), violations = [];
   let checks = 0;
-  for (const parry of ['PARRY', 'PARRY_QUARTE', 'PARRY_PRIME']) {
-    for (const a of ['STRIKE', 'PARRY', 'FEINT']) for (const b of ['STRIKE', 'PARRY', 'FEINT']) {
+  for (const guardLine of ['PAPER', 'PAPER_QUARTE', 'PAPER_PRIME']) {
+    for (const a of ['ROCK', 'PAPER', 'SCISSORS']) for (const b of ['ROCK', 'PAPER', 'SCISSORS']) {
       const stances = [a, b];
-      const capture = types => rigs.map((rig, i) => rig.capture(types[i] === 'PARRY' ? parry : types[i]));
+      const capture = types => rigs.map((rig, i) => rig.capture(types[i] === 'PAPER' ? guardLine : types[i]));
       const guard = capture(['ON_GUARD', 'ON_GUARD']);
       const salute = capture(['SALUTE', 'SALUTE']);
-      const windup = capture(stances.map(s => s === 'STRIKE' ? 'WINDUP' : 'ON_GUARD'));
-      const engagement = buildEngagement(rigs, stances, parry);
+      const windup = capture(stances.map(s => s === 'ROCK' ? 'WINDUP' : 'ON_GUARD'));
+      const engagement = buildEngagement(rigs, stances, guardLine);
       const { action, contact, winner } = engagement;
-      const counter = winner !== null && stances[winner] === 'FEINT';
-      const bait = capture(stances.map(s => s === 'FEINT' ? 'FEINT_EXTEND' : s === 'STRIKE' ? 'WINDUP' : 'PARRY'));
-      const react = capture(stances.map((s, i) => winner === null ? 'DEFLECT_REACT' : i === winner ? (s === 'PARRY' ? 'PARRY' : 'ON_GUARD') : stances[winner] === 'PARRY' ? 'DEFLECT_REACT' : 'HIT_REACT'));
+      const counter = winner !== null && stances[winner] === 'SCISSORS';
+      const bait = capture(stances.map(s => s === 'SCISSORS' ? 'SCISSORS_EXTEND' : s === 'ROCK' ? 'WINDUP' : 'PAPER'));
+      const react = capture(stances.map((s, i) => winner === null ? 'DEFLECT_REACT' : i === winner ? (s === 'PAPER' ? 'PAPER' : 'ON_GUARD') : stances[winner] === 'PAPER' ? 'DEFLECT_REACT' : 'HIT_REACT'));
       if (engagement.kind === 'body') {
         rigs[winner].applyInterpolation(contact[winner], guard[winner], 0.12);
         react[winner] = rigs[winner].snapshot();
@@ -57,22 +57,22 @@ test('all 27 combat timelines keep blades outside both fighters, including outco
         { from: salute, to: guard, phase: 'set', ease: out },
         { from: guard, to: windup, phase: 'windup', ease: out },
       ];
-      if (stances.includes('FEINT')) {
+      if (stances.includes('SCISSORS')) {
         paths.push({ from: windup, to: bait, phase: 'bait', ease: out });
         paths.push({ from: bait, to: counter || winner === null ? action : contact, phase: 'slip', ease: counter || winner === null ? smooth : t => t**3, disengage: true, drive: !counter && winner !== null });
         if (counter) paths.push({ from: action, to: contact, phase: 'riposte', ease: t => t**3, disengage: true, drive: true });
-      } else paths.push({ from: windup, to: contact, phase: 'commit', ease: a === 'PARRY' && b === 'PARRY' ? smooth : t => t**3, drive: a === 'STRIKE' || b === 'STRIKE' });
-      paths.push({ from: contact, to: winner === null && a !== 'STRIKE' ? guard : react, phase: 'rebound', ease: out });
+      } else paths.push({ from: windup, to: contact, phase: 'commit', ease: a === 'PAPER' && b === 'PAPER' ? smooth : t => t**3, drive: a === 'ROCK' || b === 'ROCK' });
+      paths.push({ from: contact, to: winner === null && a !== 'ROCK' ? guard : react, phase: 'rebound', ease: out });
       for (const path of paths) for (let frame = 0; frame <= 240; frame++) {
         const t = frame / 240;
-        rigs.forEach((rig, i) => applyCombatFrame(rig, path.from[i], path.to[i], t, path.ease(t), { disengage: path.disengage && stances[i] === 'FEINT', drive: path.drive }));
+        rigs.forEach((rig, i) => applyCombatFrame(rig, path.from[i], path.to[i], t, path.ease(t), { disengage: path.disengage && stances[i] === 'SCISSORS', drive: path.drive }));
         rigs.forEach(rig => {
           rig.animateBlade(t*0.18, path.phase === 'rebound' ? (engagement.kind === 'blade' ? 0.065 : 0.025)*Math.exp(-t*0.18*12) : 0);
           rig.group.updateMatrixWorld(true);
         });
         rigs.forEach((rig, i) => {
           const own = intersections(rig, meshes[i]);
-          if (own.length) violations.push(`${parry}:${a}/${b}:${path.phase}:${frame}:self:${i}:${own[0].object.parent.name}`);
+          if (own.length) violations.push(`${guardLine}:${a}/${b}:${path.phase}:${frame}:self:${i}:${own[0].object.parent.name}`);
           // No unintended opponent contact, including arms and recovery.
           // The flexible 9 mm point may press its intended jacket touch.
           {
@@ -80,7 +80,7 @@ test('all 27 combat timelines keep blades outside both fighters, including outco
             const tip = rig.bladeTip.getWorldPosition(new THREE.Vector3());
             const intendedTipTouch = engagement.kind === 'body' && i === winner && path.phase === 'rebound' && frame === 0 && torso.every(hit =>
               [rigs[1-i].chestShell, rigs[1-i].chestOrb].includes(hit.object) && hit.point.distanceTo(tip) < 0.009);
-            if (torso.length && !intendedTipTouch) violations.push(`${parry}:${a}/${b}:${path.phase}:${frame}:unintended-body-hit:${i}:${torso[0].object.parent.name}`);
+            if (torso.length && !intendedTipTouch) violations.push(`${guardLine}:${a}/${b}:${path.phase}:${frame}:unintended-body-hit:${i}:${torso[0].object.parent.name}`);
           }
           checks += 8;
           for (const side of ['Lead', 'Rear']) {
@@ -100,9 +100,9 @@ test('all 27 combat timelines keep blades outside both fighters, including outco
           result.update(1/60);
           rigs.forEach((rig, i) => {
             const hits = intersections(rig, meshes[i]);
-            if (hits.length) violations.push(`${parry}:${a}/${b}:${phase}:${frame}:self:${i}:${hits[0].object.parent.name}`);
+            if (hits.length) violations.push(`${guardLine}:${a}/${b}:${phase}:${frame}:self:${i}:${hits[0].object.parent.name}`);
             const rival = intersections(rig, meshes[1-i]);
-            if (rival.length) violations.push(`${parry}:${a}/${b}:${phase}:${frame}:rival:${i}:${rival[0].object.parent.name}`);
+            if (rival.length) violations.push(`${guardLine}:${a}/${b}:${phase}:${frame}:rival:${i}:${rival[0].object.parent.name}`);
           });
         }
       }

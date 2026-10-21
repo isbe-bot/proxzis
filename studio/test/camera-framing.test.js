@@ -28,15 +28,15 @@ function meshExtrema(rigs) {
   return meshes;
 }
 
-function timeline(rigs, stances, parry) {
-  const capture = types => rigs.map((rig, i) => rig.capture(types[i] === 'PARRY' ? parry : types[i]));
+function timeline(rigs, stances, guardLine) {
+  const capture = types => rigs.map((rig, i) => rig.capture(types[i] === 'PAPER' ? guardLine : types[i]));
   const guard = capture(['ON_GUARD', 'ON_GUARD']);
   const salute = capture(['SALUTE', 'SALUTE']);
-  const windup = capture(stances.map(s => s === 'STRIKE' ? 'WINDUP' : 'ON_GUARD'));
-  const { action, contact, winner, kind } = buildEngagement(rigs, stances, parry);
-  const counter = winner !== null && stances[winner] === 'FEINT';
-  const bait = capture(stances.map(s => s === 'FEINT' ? 'FEINT_EXTEND' : s === 'STRIKE' ? 'WINDUP' : 'PARRY'));
-  const react = capture(stances.map((s, i) => winner === null ? 'DEFLECT_REACT' : i === winner ? (s === 'PARRY' ? 'PARRY' : 'ON_GUARD') : stances[winner] === 'PARRY' ? 'DEFLECT_REACT' : 'HIT_REACT'));
+  const windup = capture(stances.map(s => s === 'ROCK' ? 'WINDUP' : 'ON_GUARD'));
+  const { action, contact, winner, kind } = buildEngagement(rigs, stances, guardLine);
+  const counter = winner !== null && stances[winner] === 'SCISSORS';
+  const bait = capture(stances.map(s => s === 'SCISSORS' ? 'SCISSORS_EXTEND' : s === 'ROCK' ? 'WINDUP' : 'PAPER'));
+  const react = capture(stances.map((s, i) => winner === null ? 'DEFLECT_REACT' : i === winner ? (s === 'PAPER' ? 'PAPER' : 'ON_GUARD') : stances[winner] === 'PAPER' ? 'DEFLECT_REACT' : 'HIT_REACT'));
   if (kind === 'body') {
     rigs[winner].applyInterpolation(contact[winner], guard[winner], 0.12);
     react[winner] = rigs[winner].snapshot();
@@ -47,12 +47,12 @@ function timeline(rigs, stances, parry) {
     { from: salute, to: guard, phase: 'set', ease: out },
     { from: guard, to: windup, phase: 'windup', ease: out },
   ];
-  if (stances.includes('FEINT')) {
+  if (stances.includes('SCISSORS')) {
     paths.push({ from: windup, to: bait, phase: 'bait', ease: out });
     paths.push({ from: bait, to: counter || winner === null ? action : contact, phase: 'slip', ease: counter || winner === null ? smooth : inward, disengage: true, drive: !counter && winner !== null });
     if (counter) paths.push({ from: action, to: contact, phase: 'riposte', ease: inward, disengage: true, drive: true });
-  } else paths.push({ from: windup, to: contact, phase: 'commit', ease: stances.every(s => s === 'PARRY') ? smooth : inward, drive: stances.includes('STRIKE') });
-  paths.push({ from: contact, to: winner === null && stances[0] !== 'STRIKE' ? guard : react, phase: 'rebound', ease: out });
+  } else paths.push({ from: windup, to: contact, phase: 'commit', ease: stances.every(s => s === 'PAPER') ? smooth : inward, drive: stances.includes('ROCK') });
+  paths.push({ from: contact, to: winner === null && stances[0] !== 'ROCK' ? guard : react, phase: 'rebound', ease: out });
   return { paths, winner, kind };
 }
 
@@ -92,14 +92,14 @@ test('God/broadcast enclose actual mesh extrema through all 27 choreographies wi
     }
     view.frames++;
   }
-  for (const parry of ['PARRY', 'PARRY_QUARTE', 'PARRY_PRIME']) {
-    for (const a of ['STRIKE', 'PARRY', 'FEINT']) for (const b of ['STRIKE', 'PARRY', 'FEINT']) {
-      const stances = [a, b], label = `${parry}:${a}/${b}`;
-      const { paths, winner, kind } = timeline(rigs, stances, parry);
+  for (const guardLine of ['PAPER', 'PAPER_QUARTE', 'PAPER_PRIME']) {
+    for (const a of ['ROCK', 'PAPER', 'SCISSORS']) for (const b of ['ROCK', 'PAPER', 'SCISSORS']) {
+      const stances = [a, b], label = `${guardLine}:${a}/${b}`;
+      const { paths, winner, kind } = timeline(rigs, stances, guardLine);
       for (const path of paths) for (let frame = 0; frame <= 60; frame++) {
         const alpha = frame / 60;
         rigs.forEach((rig, i) => {
-          applyCombatFrame(rig, path.from[i], path.to[i], alpha, path.ease(alpha), { disengage: path.disengage && stances[i] === 'FEINT', drive: path.drive });
+          applyCombatFrame(rig, path.from[i], path.to[i], alpha, path.ease(alpha), { disengage: path.disengage && stances[i] === 'SCISSORS', drive: path.drive });
           rig.animateBlade(alpha * 0.18, path.phase === 'rebound' ? (kind === 'blade' ? 0.065 : 0.025) * Math.exp(-alpha * 0.18 * 12) : 0);
           rig.group.updateMatrixWorld(true);
         });

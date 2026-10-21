@@ -28,9 +28,9 @@ try {
   await page.click('[data-camera="broadcast"]');
   await page.screenshot({path:`${proof}/guard-broadcast.png`});
   await page.click('[data-camera="god"]');
-  for(const parry of ['PARRY','PARRY_QUARTE','PARRY_PRIME']) {
-    await page.selectOption('#parry-line',parry);
-    for(const a of ['STRIKE','FEINT','PARRY']) for(const b of ['STRIKE','FEINT','PARRY']) {
+  for(const guardLine of ['PAPER','PAPER_QUARTE','PAPER_PRIME']) {
+    await page.selectOption('#guard-line',guardLine);
+    for(const a of ['ROCK','SCISSORS','PAPER']) for(const b of ['ROCK','SCISSORS','PAPER']) {
       await page.click(`#botA-btns [data-stance="${a}"]`);
       await page.click(`#botB-btns [data-stance="${b}"]`);
       await page.evaluate(()=>{
@@ -50,8 +50,8 @@ try {
       const headings=d.outcome.rigs.map(rig=>rig.facing);
       assert.ok(Math.hypot(...headings[0].map((v,i)=>v-headings[1][i]))<1e-8);
       d.outcome.rigs.forEach(rig=>rig.feet.forEach(foot=>assert.ok(Math.abs(foot[1]-0.075)<1e-6)));
-      cases.push({parry,a,b,winner:d.outcome.result.winner,guard:d.guard.rigs.map(r=>({headFacing:r.headFacing,torsoYaw:r.torsoYaw}))});
-      console.log(`PASS ${parry} ${a}/${b}`);
+      cases.push({guardLine,a,b,winner:d.outcome.result.winner,guard:d.guard.rigs.map(r=>({headFacing:r.headFacing,torsoYaw:r.torsoYaw}))});
+      console.log(`PASS ${guardLine} ${a}/${b}`);
     }
   }
   assert.deepEqual(errors,[]);

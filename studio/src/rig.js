@@ -11,7 +11,7 @@ const footTurn = new THREE.Quaternion();
 const v = new THREE.Vector3();
 const q = new THREE.Quaternion();
 const q2 = new THREE.Quaternion();
-const poses = ['ON_GUARD', 'SALUTE', 'WINDUP', 'STRIKE', 'FOLLOW_THROUGH', 'PARRY', 'PARRY_QUARTE', 'PARRY_PRIME', 'FEINT', 'FEINT_EXTEND', 'HIT_REACT', 'DEFLECT_REACT', 'VICTORY', 'DEFEAT', 'ATTENTION'];
+const poses = ['ON_GUARD', 'SALUTE', 'WINDUP', 'ROCK', 'FOLLOW_THROUGH', 'PAPER', 'PAPER_QUARTE', 'PAPER_PRIME', 'SCISSORS', 'SCISSORS_EXTEND', 'HIT_REACT', 'DEFLECT_REACT', 'VICTORY', 'DEFEAT', 'ATTENTION'];
 
 export class StudioRig {
   constructor(color = FIGHTER_COLORS[0], isFacingRight = true) {
@@ -321,7 +321,7 @@ export class StudioRig {
         r('shoulderLead', -0.06, 0, 0.88);
         r('elbowLead', 0, 0, 0.73);
         break;
-      case 'STRIKE':
+      case 'ROCK':
       case 'FOLLOW_THROUGH':
         b.pelvis.position.set(0.44, 0.75, 0);
         r('spine', 0, 0.08, -0.045);
@@ -334,25 +334,25 @@ export class StudioRig {
         blade = [1, 0.025, -0.23];
         flex = type === 'FOLLOW_THROUGH' ? 0.045 : 0;
         break;
-      case 'PARRY':
-      case 'PARRY_QUARTE':
-      case 'PARRY_PRIME':
+      case 'PAPER':
+      case 'PAPER_QUARTE':
+      case 'PAPER_PRIME':
         b.pelvis.position.set(-0.09, 0.99, 0);
         r('spine', 0, 0.10, 0.055);
         r('chest', 0, -0.10, 0);
-        r('shoulderLead', type === 'PARRY_QUARTE' ? 0.48 : -0.22, 0, 0.72);
-        r('elbowLead', 0, 0, type === 'PARRY_PRIME' ? 0.55 : 0.9);
-        blade = type === 'PARRY_PRIME' ? [0.32, -0.85, -0.38] : type === 'PARRY_QUARTE' ? [0.48, 0.70, -0.5] : [0.52, 0.74, 0.3];
+        r('shoulderLead', type === 'PAPER_QUARTE' ? 0.48 : -0.22, 0, 0.72);
+        r('elbowLead', 0, 0, type === 'PAPER_PRIME' ? 0.55 : 0.9);
+        blade = type === 'PAPER_PRIME' ? [0.32, -0.85, -0.38] : type === 'PAPER_QUARTE' ? [0.48, 0.70, -0.5] : [0.52, 0.74, 0.3];
         lead = 0.32;
         break;
-      case 'FEINT_EXTEND':
+      case 'SCISSORS_EXTEND':
         b.pelvis.position.set(0.12, 0.99, 0);
         r('shoulderLead', -0.06, 0, 1.24);
         r('elbowLead', 0, 0, 0.36);
         lead = 0.54; rear = -0.28;
         blade = [1, -0.06, 0.08];
         break;
-      case 'FEINT':
+      case 'SCISSORS':
         b.pelvis.position.set(-0.15, 1.00, 0);
         r('spine', 0, 0.12, 0.06);
         r('shoulderLead', 0.07, 0, 0.93);

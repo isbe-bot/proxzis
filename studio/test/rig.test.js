@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { StudioRig } from '../src/rig.js';
-const poses = ['ON_GUARD', 'SALUTE', 'WINDUP', 'STRIKE', 'FOLLOW_THROUGH', 'PARRY', 'PARRY_QUARTE', 'PARRY_PRIME', 'FEINT', 'FEINT_EXTEND', 'HIT_REACT', 'DEFLECT_REACT', 'VICTORY', 'DEFEAT', 'ATTENTION'];
+const poses = ['ON_GUARD', 'SALUTE', 'WINDUP', 'ROCK', 'FOLLOW_THROUGH', 'PAPER', 'PAPER_QUARTE', 'PAPER_PRIME', 'SCISSORS', 'SCISSORS_EXTEND', 'HIT_REACT', 'DEFLECT_REACT', 'VICTORY', 'DEFEAT', 'ATTENTION'];
 function checkFeet(rig) {
   rig.group.updateMatrixWorld(true);
   for (const side of ['Lead', 'Rear']) {
@@ -60,7 +60,7 @@ for (const facing of [true, false]) {
     assert.ok(Math.abs(rig.bones.kneeLead.rotation.z) > 0.8, 'Guard must visibly bend both knees');
     const guardTip = localPoint(rig.bladeTip);
     assert.ok(guardTip.y > 1.75 && guardTip.y < 2.15, 'High guard point must address head/face height');
-    rig.pose('STRIKE');
+    rig.pose('ROCK');
     rig.group.updateMatrixWorld(true);
     assert.ok(Math.abs(rig.bones.kneeRear.rotation.z) < 0.25, 'Rear leg must extend almost straight');
     assert.ok(Math.abs(Math.abs(rig.bones.kneeLead.rotation.z) - Math.PI / 2) < 0.15, 'Front knee must form a deep right-angle lunge');
@@ -70,11 +70,11 @@ for (const facing of [true, false]) {
     assert.ok(localPoint(rig.bones.wristRear).x < localPoint(rig.bones.shoulderRear).x - 0.6, 'Rear arm must counterbalance behind');
     const blade = localPoint(rig.bladeTip).sub(localPoint(rig.bladeBase)).normalize();
     assert.ok(blade.x > 0.96 && Math.abs(blade.y) < 0.06, 'Lunge blade must address the opponent horizontally');
-    for (const variant of ['PARRY', 'PARRY_QUARTE', 'PARRY_PRIME']) {
+    for (const variant of ['PAPER', 'PAPER_QUARTE', 'PAPER_PRIME']) {
       rig.pose(variant);
       checkFeet(rig);
       const direction = localPoint(rig.bladeTip).sub(localPoint(rig.bladeBase));
-      assert.ok(variant === 'PARRY_PRIME' ? direction.y < -0.5 : direction.y > 0.5, 'Parry must redirect into the selected line');
+      assert.ok(variant === 'PAPER_PRIME' ? direction.y < -0.5 : direction.y > 0.5, 'Paper guard must redirect into the selected line');
     }
     rig.group.traverse(object => assert.notEqual(object.geometry?.type, 'BoxGeometry', 'Rig must contain no chunky boxes'));
   });
