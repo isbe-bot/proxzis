@@ -8,17 +8,14 @@ const props = defineProps({
   owner: { type: String, required: true },
   concealed: Boolean,
   outcome: { type: String, default: null },
+  // Replaces the generated accessible name.
+  label: { type: String, default: null },
 })
 
 const handSrc = computed(() => {
   const isRight = props.side === 'b' || props.side === 'right'
   const prefix = isRight ? 'right' : 'left'
-  let pose = 'rock'
-  if (!props.concealed) {
-    if (props.stance === 'feint') pose = 'paper'
-    else if (props.stance === 'parry') pose = 'scissors'
-    else pose = 'rock'
-  }
+  const pose = props.concealed || !STANCE_GLYPHS[props.stance] ? 'rock' : props.stance
   return `/assets/hands/${prefix}_${pose}.png`
 })
 </script>
@@ -31,7 +28,7 @@ const handSrc = computed(() => {
       !concealed && outcome ? `hand-${outcome}` : null
     ]"
     role="img"
-    :aria-label="`${owner}: ${concealed ? 'closed fist, stance concealed' : stanceName(stance)}${!concealed && outcome ? `, ${outcome === 'win' ? 'round won' : outcome === 'lose' ? 'round lost' : 'round drawn'}` : ''}`"
+    :aria-label="label || `${owner}: ${concealed ? 'closed fist, stance concealed' : stanceName(stance)}${!concealed && outcome ? `, ${outcome === 'win' ? 'round won' : outcome === 'lose' ? 'round lost' : 'round drawn'}` : ''}`"
   >
     <img
       class="hand-img"
@@ -39,8 +36,7 @@ const handSrc = computed(() => {
       :alt="concealed ? 'Closed fist' : stanceName(stance)"
       aria-hidden="true"
       draggable="false"
-    />
-    <span class="hand-symbol-glyph sr-only" aria-hidden="true">{{ concealed ? '✊' : STANCE_GLYPHS[stance] }}</span>
+    />    <span class="hand-symbol-glyph sr-only" aria-hidden="true">{{ concealed ? '✊' : STANCE_GLYPHS[stance] }}</span>
   </span>
 </template>
 
@@ -51,7 +47,7 @@ const handSrc = computed(() => {
   justify-content: center;
   vertical-align: middle;
   flex-shrink: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--dur-slow) var(--ease);
   position: relative;
 }
 
@@ -62,7 +58,7 @@ const handSrc = computed(() => {
   max-height: calc(var(--hand-size, 1.5em) * 1.1);
   object-fit: contain;
   pointer-events: none;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  filter: drop-shadow(var(--shadow-object));
 }
 
 .sr-only {

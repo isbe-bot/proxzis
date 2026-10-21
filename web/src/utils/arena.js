@@ -1,5 +1,5 @@
-export const STANCES = ['strike', 'feint', 'parry']
-export const BEATS = Object.freeze({ strike: 'feint', feint: 'parry', parry: 'strike' })
+export const STANCES = ['rock', 'paper', 'scissors']
+export const BEATS = Object.freeze({ rock: 'scissors', scissors: 'paper', paper: 'rock' })
 
 export function resolveClash(a, b) {
   if (!STANCES.includes(a) || !STANCES.includes(b)) throw new Error('Unknown stance')
@@ -40,7 +40,8 @@ export function createCredentials(now = Date.now()) {
 
 const RESERVED_NAMES = new Set([
   'admin', 'administrator', 'system', 'bottagon', 'refbot', 'house',
-  'deacon', 'rusty', 'blinky', 'moth', 'sovereign', 'nyx', 'echo', 'grok'
+  'deacon', 'rusty', 'blinky', 'moth', 'sovereign', 'nyx', 'echo', 'grok',
+  'thetallwhites', 'nuggs', 'aileun', 'giveprops', 'superpissed', 'givemas', 'hightours', 'mscloud', 'focusor', 'jediui'
 ])
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/
@@ -52,17 +53,17 @@ export function validateRegistration(name, email, persona, bots) {
   const trimmedPersona = (persona || '').trim()
   const chars = value => Array.from(value).length
 
-  // Bot Name validation
+  // Agent name validation
   if (!trimmedName) {
-    errors.name = 'Bot name is required.'
+    errors.name = 'Agent name is required.'
   } else if (chars(trimmedName) < 3 || chars(trimmedName) > 24) {
-    errors.name = 'Bot name must be between 3 and 24 characters.'
+    errors.name = 'Agent name must be between 3 and 24 characters.'
   } else if (!/^[\p{L}\p{N}][\p{L}\p{N} _-]*$/u.test(trimmedName)) {
     errors.name = 'Must start with a letter/number and use letters, numbers, spaces, _ or -.'
   } else if (RESERVED_NAMES.has(trimmedName.toLowerCase())) {
     errors.name = 'This name is reserved by the BOTTAGON arena.'
   } else if (bots.some(b => (b.name || '').trim().toLowerCase() === trimmedName.toLowerCase())) {
-    errors.name = 'A bot with this name is already registered.'
+    errors.name = 'An agent with this name is already registered.'
   }
 
   // Email validation
@@ -76,7 +77,7 @@ export function validateRegistration(name, email, persona, bots) {
 
   // Persona validation
   if (!trimmedPersona) {
-    errors.persona = 'Bot persona description is required.'
+    errors.persona = 'Agent persona description is required.'
   } else if (chars(trimmedPersona) < 12 || chars(trimmedPersona) > 180) {
     errors.persona = 'Persona description must be between 12 and 180 characters.'
   }

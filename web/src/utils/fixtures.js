@@ -41,13 +41,13 @@ export const blinky = {
 export const bots = [sovereign, blinky]
 
 const rounds = () => [
-  ['feint', 'strike'],
-  ['strike', 'parry'],
-  ['parry', 'feint'],
-  ['strike', 'strike'],
-  ['feint', 'parry'],
-  ['parry', 'strike'],
-  ['feint', 'feint'],
+  ['scissors', 'rock'],
+  ['rock', 'paper'],
+  ['paper', 'scissors'],
+  ['rock', 'rock'],
+  ['scissors', 'paper'],
+  ['paper', 'rock'],
+  ['scissors', 'scissors'],
 ].map(([a, b]) => ({
   a,
   b,

@@ -5,15 +5,15 @@ import { STANCES, resolveClash, createCredentials, validateRegistration } from '
 const bots = [{ name: 'Sovereign-1', email: 'sovereign@example.com' }, { name: 'Blinky' }]
 
 test('all nine stance pairings follow the specified Parley cycle', () => {
-  // STANCES = ['strike', 'feint', 'parry']
-  // Engine matrix: strike beats feint, feint beats parry, parry beats strike.
+  // STANCES = ['rock', 'paper', 'scissors']
+  // Engine matrix: rock beats scissors, scissors beats paper, paper beats rock.
   const expected = [
-    ['draw', 'a', 'b'],
-    ['b', 'draw', 'a'],
-    ['a', 'b', 'draw']
+    ['draw', 'b', 'a'],
+    ['a', 'draw', 'b'],
+    ['b', 'a', 'draw']
   ]
   STANCES.forEach((a, i) => STANCES.forEach((b, j) => assert.equal(resolveClash(a, b), expected[i][j])))
-  assert.throws(() => resolveClash('unknown', 'strike'))
+  assert.throws(() => resolveClash('unknown', 'rock'))
 })
 test('UUIDv7 encodes the timestamp, version and RFC variant', () => {
   const now = 1792498800123

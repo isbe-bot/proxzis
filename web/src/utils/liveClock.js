@@ -1,10 +1,29 @@
-// One elapsed-time source drives labels, both hands, reveal, scores and replay.
-export const SHAKE_MS = 350
-export const SHAKE_COUNT = 3
-export const REVEAL_AT_MS = SHAKE_MS * SHAKE_COUNT // 1050 ms
-export const RESULT_AT_MS = REVEAL_AT_MS + 400     // 1450 ms: quick transition directly into judging & fade
-export const ROUND_MS = 5400
-export const FINAL_HOLD_MS = 5400
+// One elapsed-time source drives both hands, the reveal, the score and the replay loop.
+// Each round: both rock fists drop onto the floor (1), pound once more (2), and
+// the next downstroke lands as the move (Shoot). The loser starts fading at Shoot,
+// the result holds briefly, the hands lift out and the next round drops in.
+export const DROP_MS = 300
+export const BUMP_MS = 240
+export const BUMP_COUNT = 2
+export const SHOOT_AT_MS = DROP_MS + BUMP_MS * BUMP_COUNT // 780 ms
+export const EXIT_MS = 240
+export const ROUND_MS = 2560
+export const FINAL_HOLD_MS = 4000
+// Hand height above the floor, in bump heights. Drop starts and exit ends out of view.
+export const OFFSTAGE_LIFT = 8
+
+const easeIn = p => p * p
+const easeOut = p => 1 - (1 - p) * (1 - p)
+
+function liftAt(t) {
+  if (t < DROP_MS) return OFFSTAGE_LIFT * (1 - easeIn(t / DROP_MS))
+  if (t < SHOOT_AT_MS) {
+    const q = ((t - DROP_MS) % BUMP_MS) / BUMP_MS
+    return q < 0.5 ? easeOut(q / 0.5) : 1 - easeIn((q - 0.5) / 0.5)
+  }
+  if (t >= ROUND_MS - EXIT_MS) return OFFSTAGE_LIFT * easeIn((t - (ROUND_MS - EXIT_MS)) / EXIT_MS)
+  return 0
+}
 
 export function liveTimeline(elapsed, roundCount = 7) {
   if (!Number.isInteger(roundCount) || roundCount < 1) throw new RangeError('At least one round is required')
@@ -15,18 +34,15 @@ export function liveTimeline(elapsed, roundCount = 7) {
   const complete = local >= duration
   const roundIndex = Math.min(Math.floor(local / ROUND_MS), roundCount - 1)
   const roundElapsed = complete ? ROUND_MS : local % ROUND_MS
-  const phase = complete ? 'complete' : roundElapsed < REVEAL_AT_MS ? 'thinking' : roundElapsed < RESULT_AT_MS ? 'reveal' : 'result'
-  const shakeIndex = phase === 'thinking' ? Math.floor(roundElapsed / SHAKE_MS) : SHAKE_COUNT
-  const shakeProgress = phase === 'thinking' ? (roundElapsed % SHAKE_MS) / SHAKE_MS : 0
+  const phase = complete ? 'complete' : roundElapsed < DROP_MS ? 'drop' : roundElapsed < SHOOT_AT_MS ? 'count' : 'result'
   return {
     bout: Math.floor(time / cycle) + 1,
     roundIndex,
     roundElapsed,
     phase,
-    shakeIndex,
-    // Exactly one rise and return per cue; no independent CSS animation clock.
-    handOffset: phase === 'thinking' && shakeProgress > 0 ? -18 * Math.sin(Math.PI * shakeProgress) : 0,
-    cue: complete ? 'Match complete' : phase === 'thinking' ? ['Rock', 'Paper', 'Scissors'][shakeIndex] : phase === 'reveal' ? 'Shoot!' : 'Round result',
+    // 0 while falling, 1-2 after each rock lands, 3 once Shoot lands.
+    beat: phase === 'drop' ? 0 : phase === 'count' ? 1 + Math.floor((roundElapsed - DROP_MS) / BUMP_MS) : BUMP_COUNT + 1,
+    lift: complete ? 0 : liftAt(roundElapsed),
     resolved: complete ? roundCount : roundIndex + (phase === 'result' ? 1 : 0),
     remaining: complete ? 0 : ROUND_MS - roundElapsed,
   }

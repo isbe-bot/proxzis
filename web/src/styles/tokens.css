@@ -1,0 +1,101 @@
+:root {
+  /* Type families. Archivo's width axis carries both voices: condensed for display, normal for reading. */
+  --font-sans: "Archivo Variable", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --stretch-display: 78%;
+  --stretch-text: 100%;
+
+  /* Type scale: major third (1.25) from 16px. Nothing on the page is set below --step--2. */
+  --step--2: 0.75rem;    /* 12  mono labels only */
+  --step--1: 0.875rem;   /* 14  metadata, captions */
+  --step-0: 1rem;        /* 16  body */
+  --step-1: 1.25rem;     /* 20  lede, card titles */
+  --step-2: 1.5625rem;   /* 25  subsection titles */
+  --step-3: 1.9375rem;   /* 31  */
+  --step-4: clamp(2rem, 1.5rem + 1.6vw, 2.4375rem);   /* 32-39  section titles */
+  --step-5: clamp(2.4375rem, 1.8rem + 2.2vw, 3.0625rem); /* 39-49 */
+  --step-6: clamp(2.75rem, 1.6rem + 3.6vw, 3.8125rem);   /* 44-61 */
+  --step-7: clamp(3rem, 1.4rem + 5vw, 4.75rem);          /* 48-76  hero */
+
+  --leading-display: 1.02;
+  --leading-tight: 1.2;
+  --leading-text: 1.55;
+
+  --tracking-display: -0.02em;
+  --tracking-label: 0.08em;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  /* Neutrals: one carbon ramp for every surface, line and word. */
+  --carbon-950: #08090b;
+  --carbon-900: #0c0e11;
+  --carbon-850: #111317;
+  --carbon-800: #16191e;
+  --carbon-750: #1c2026;
+  --carbon-700: #252a31;
+  --carbon-600: #333943;
+  --carbon-500: #4a515d;
+
+  --ink: #eceef1;
+  --ink-secondary: #b5bbc4;
+  --ink-muted: #8a919c;
+
+  --bg-page: var(--carbon-900);
+  --bg-sunken: var(--carbon-950);
+  --surface: var(--carbon-850);
+  --surface-raised: var(--carbon-800);
+  --surface-hover: var(--carbon-750);
+  --line: var(--carbon-700);
+  --line-strong: var(--carbon-600);
+
+  /* Sides. Cobalt is always the left (first) agent, crimson the right. They mean nothing else. */
+  --cobalt: #5b82ff;
+  --cobalt-fill: #2f5bff;
+  --cobalt-tint: #121b3a;
+  --crimson: #ff5c66;
+  --crimson-fill: #c8303b;
+  --crimson-tint: #3a1217;
+
+  /* Marbles. Gold is stakes, purses and payouts, and the marble in the mark. Nothing else. */
+  --gold: #e9b949;
+  --gold-tint: #2b220f;
+
+  /* Interaction is ink on carbon, so no hue is spent on chrome. */
+  --action-bg: var(--ink);
+  --action-fg: var(--carbon-950);
+  --action-bg-hover: #ffffff;
+  --focus-ring: var(--ink);
+
+  /* Space: 4px base. */
+  --space-1: 0.25rem;  /* 4 */
+  --space-2: 0.5rem;   /* 8 */
+  --space-3: 0.75rem;  /* 12 */
+  --space-4: 1rem;     /* 16 */
+  --space-5: 1.5rem;   /* 24 */
+  --space-6: 2rem;     /* 32 */
+  --space-7: 3rem;     /* 48 */
+  --space-8: 4rem;     /* 64 */
+  --space-9: 6rem;     /* 96 */
+  --space-10: 8rem;    /* 128 */
+
+  --content: 75rem;    /* 1200 */
+  --prose: 42.5rem;    /* 680, about 70 characters of body text */
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+  --header-height: 4.5rem;
+
+  --radius-control: 4px;
+  --radius-surface: 8px;
+
+  --shadow-1: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 12px 32px -12px rgb(0 0 0 / 0.7);
+  --shadow-3: 0 30px 80px -20px rgb(0 0 0 / 0.85);
+  --shadow-object: 0 6px 12px rgb(0 0 0 / 0.5);
+
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}

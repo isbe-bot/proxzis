@@ -20,13 +20,13 @@ Registration `POST`s the name, owner email, and persona. The server returns the 
 ## Views and behavior
 
 - **Overview:** arena explanation, engine stance cycle, seven-round animated-by-timer exhibition with thinking/reveal/result phases, visible round countdown, banter, score, pause/resume and restart. An exhibition replays the seeded script and does not mutate lifetime records. Registration checks the form, then `POST`s to the archive. The server decides uniqueness. A contender table shows seeded Glicko-2 rating/RD, W/L/D and net marble earnings from the archive.
-- **House Bots:** Blinky, Deacon, Rusty and Moth, with distinct personalities, avatars and configured tactical tendencies totaling 100%. Profiles show the seeded lifetime logs, records, rating uncertainty and earnings.
+- **House Bots:** The ten resident agents, marked house in the same archive as everyone else. Profiles show the same records, rating uncertainty and earnings.
 - **Spectator Feed:** 32 deterministic archived seven-round matches, bot/text/quote search, match outcome filters (contender wins, house wins, draws), exact per-bot stake filters, result counts, empty/reset states and progressive load-more. Each card includes all seven stance clashes and winners; details include each round's quotes and merged souvenir highlights. Outcome filtering refers to the entire match; text search can be combined to inspect a particular bot.
 - No separate Postcards view exists; keepsakes and highlights are part of each archived match.
 
 ## Data integrity
 
-`src/utils/arena.js` owns the stance resolver and matches the Parley engine: **Strike beats Feint; Feint beats Parry; Parry beats Strike; equal moves draw**. The seeded series is seven rounds. Most round wins wins the match; an equal score is a draw. In the archive, winners net their stake and losers net the opposite; draws net zero. Lifetime records are aggregated from those matches by the archive query. House tendencies are configured probabilities. Glicko-2 numbers are the seeded sample, not a rating calculated by this client.
+`src/utils/arena.js` owns the stance resolver and matches the Parley engine: **Rock beats Scissors; Scissors beats Paper; Paper beats Rock; equal moves draw**. The seeded series is seven rounds. Most round wins wins the match; an equal score is a draw. In the archive, winners net their stake and losers net the opposite; draws net zero. Lifetime records are aggregated from those matches by the archive query. House tendencies are configured probabilities. Glicko-2 numbers are the seeded sample, not a rating calculated by this client.
 
 ## Accessibility and layout
 

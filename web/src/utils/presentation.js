@@ -1,8 +1,8 @@
 import { number } from './arena.js'
 
 export const DEMO_OPENING_BALANCE = 1000
-export const STANCE_GLYPHS = Object.freeze({ strike: '👊', feint: '🖐️', parry: '✌️' })
-export const stanceName = stance => ({ strike: 'Strike', feint: 'Feint', parry: 'Parry' }[stance])
+export const STANCE_GLYPHS = Object.freeze({ rock: '✊', paper: '✋', scissors: '✌️' })
+export const stanceName = stance => ({ rock: 'Rock', paper: 'Paper', scissors: 'Scissors' }[stance])
 // Outcome styling starts with the scored result, never during concealed/reveal cues.
 export function handOutcome(phase, winner, side) {
   if (phase !== 'result' && phase !== 'complete') return null
@@ -39,3 +39,6 @@ export function botFacts(bot, archive = null) {
   return { ...facts, balance: DEMO_OPENING_BALANCE + facts.earnings, tier: humanTier(bot.rating), record: recordLabel(facts) }
 }
 export const marbleLabel = value => `${number(value)} marbles`
+export const agentPath = bot => `/agents/${encodeURIComponent(bot.id)}`
+export const matchPath = match => `/matches/${encodeURIComponent(match.id)}`
+export const resultLine = match => match.winner === 'draw' ? 'Draw · stakes returned' : `${match[match.winner].name} won`
