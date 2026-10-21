@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BOTTAGON Studio — Void Engagement</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root {
+      --bg: #090a0f;
+      --panel: #11141e;
+      --border: #232a3b;
+      --text: #e2e8f0;
+      --accent: #0044ff;
+      --accent-hover: #0033cc;
+      --danger: #990000;
+      --blood-red: #990000;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      overflow: hidden;
+      display: flex;
+      height: 100vh;
+      width: 100%;
+    }
+    #viewport-container {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      position: relative;
+      background: radial-gradient(circle at center, #171b26 0%, #08090d 100%);
+    }
+    #canvas3d {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #studio-panel {
+      width: 360px;
+      height: 100%;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 1.25rem;
+      gap: 1.25rem;
+      overflow-y: auto;
+    }
+    .panel-header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+    .panel-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .panel-title span {
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      font-weight: 800;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .control-label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+    }
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.4rem;
+    }
+    button {
+      background: #1e2433;
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 0.55rem 0.75rem;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-weight: 500;
+    }
+    button:hover {
+      background: #2b3347;
+      border-color: var(--accent);
+    }
+    button.active {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      border-color: var(--accent);
+    }
+    #botB-btns button.active { background: var(--blood-red); border-color: var(--blood-red); }
+    button.btn-primary {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      border-color: var(--accent);
+    }
+    button.btn-primary:hover {
+      background: var(--accent-hover);
+    }
+    button.btn-record {
+      background: var(--blood-red);
+      border-color: var(--blood-red);
+      color: #fecaca;
+    }
+    button.btn-record:hover {
+      background: #770000;
+    }
+    button.btn-record.recording {
+      background: var(--danger);
+      color: #fff;
+      animation: pulse 1s infinite;
+    }
+    button:disabled { opacity: 0.45; cursor: wait; }
+    button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+    @media (max-width: 760px) {
+      body { flex-direction: column; overflow: auto; height: 100dvh; }
+      #viewport-container { flex: none; height: 58dvh; min-height: 320px; }
+      #studio-panel { width: 100%; height: auto; min-height: 42dvh; border-left: 0; border-top: 1px solid var(--border); overflow: visible; }
+      #overlay-banner { top: 0.8rem; left: 0.8rem; padding: 0.6rem; }
+      #overlay-banner h2 { font-size: 0.9rem; }
+      #overlay-banner p { font-size: 0.65rem; }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .camera-grid { grid-template-columns: repeat(2, 1fr); }
+    .status-box {
+      background: #0b0e14;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.75rem;
+      font-size: 0.8rem;
+      font-family: monospace;
+      color: #668cff;
+      min-height: 80px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .clip-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .clip-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0b0e14;
+      padding: 0.4rem 0.6rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      border: 1px solid #1e2433;
+    }
+    .clip-item a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: bold;
+    }
+    .clip-item a:hover {
+      text-decoration: underline;
+    }
+    #overlay-banner {
+      position: absolute;
+      top: 1.5rem;
+      left: 1.5rem;
+      background: rgba(17, 20, 30, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 0.75rem 1.25rem;
+      border-radius: 6px;
+      pointer-events: none;
+    }
+    #overlay-banner h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.2rem;
+    }
+    #overlay-banner p {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div id="viewport-container">
+    <canvas id="canvas3d"></canvas>
+    <div id="overlay-banner">
+      <h2 id="matchup-title">IDLE / ON GUARD</h2>
+      <p id="matchup-detail">Both fighters in neutral defensive posture</p>
+    </div>
+  </div>
+
+  <div id="studio-panel">
+    <div class="panel-header">
+      <div class="panel-title">
+        BOTTAGON STUDIO <span>VOID</span>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">Camera Presets</div>
+      <div class="btn-grid camera-grid" role="group" aria-label="Camera presets">
+        <button data-camera="god" class="active" aria-pressed="true">God View · Best Seat</button>
+        <button data-camera="broadcast" aria-pressed="false">Broadcast Left</button>
+        <button data-camera="dynamic" aria-pressed="false">Dynamic 3/4</button>
+        <button data-camera="low" aria-pressed="false">Low Angle Dramatic</button>
+        <button data-camera="close" aria-pressed="false">Close Clash</button>
+        <button data-camera="stadium" aria-pressed="false">Stadium View</button>
+      </div>
+    </div>
+
+    <!-- Fighter Stance Selection -->
+    <div class="control-group">
+      <div class="control-label">Bot A (Cobalt Blue) Stance</div>
+      <div class="btn-grid" id="botA-btns">
+        <button data-stance="STRIKE">STRIKE</button>
+        <button data-stance="FEINT">FEINT</button>
+        <button data-stance="PARRY">PARRY</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">Bot B (Blood Red) Stance</div>
+      <div class="btn-grid" id="botB-btns">
+        <button data-stance="STRIKE">STRIKE</button>
+        <button data-stance="FEINT">FEINT</button>
+        <button data-stance="PARRY">PARRY</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label class="control-label" for="parry-line">Classical parry line</label>
+      <select id="parry-line" style="background:#1e2433;color:#fff;border:1px solid #232a3b;border-radius:4px;padding:0.65rem;font:inherit">
+        <option value="PARRY">Sixte · high outside</option>
+        <option value="PARRY_QUARTE">Quarte · high inside</option>
+        <option value="PARRY_PRIME">Prime · low inverted</option>
+      </select>
+      <p style="font-size:0.75rem;line-height:1.5;color:#94a3b8">Balanced athletic guard. Physical blade salute, then point-first extension. Full lunge, blade-only defence, circular disengage.</p>
+    </div>
+
+    <!-- Playback Controls -->
+    <div class="control-group">
+      <div class="control-label">Action Preview</div>
+      <button class="btn-primary" id="btn-play">▶ Play Engagement &amp; Clash</button>
+      <button id="btn-idle">Reset to On-Guard</button>
+    </div>
+
+    <!-- Export & Recording -->
+    <div class="control-group">
+      <div class="control-label">Video / WebM Capture</div>
+      <button class="btn-record" id="btn-record-one">⏺ Record Current Matchup (WebM)</button>
+      <button class="btn-primary" id="btn-batch-export">⚡ Batch Record All 9 Outcomes</button>
+      <p style="font-size:0.75rem;line-height:1.5;color:#94a3b8">Uses your current camera angle, zoom and parry line. Settings stay locked until all 9 clips finish.</p>
+    </div>
+
+    <!-- Status & Downloads -->
+    <div class="control-group">
+      <div class="control-label">Console & Telemetry</div>
+      <div class="status-box" id="status-log" role="status" aria-live="polite">Studio initialized. Ready.</div>
+    </div>
+
+    <div class="control-group">
+      <div class="control-label">Exported Clips</div>
+      <div class="clip-list" id="clip-downloads">
+        <!-- Rendered clips will link here -->
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "bottagon-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "node --test test/*.test.js",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.174.0",
+    "webm-muxer": "^5.1.4"
+  },
+  "devDependencies": {
+    "vite": "^6.2.0"
+  }
+}

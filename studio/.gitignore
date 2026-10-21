@@ -1,0 +1,7 @@
+node_modules/
+dist/
+deploy-backups/
+*.log
+.env
+.env.*
+!.env.example

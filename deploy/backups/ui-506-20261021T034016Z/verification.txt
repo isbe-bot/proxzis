@@ -1,0 +1,17 @@
+CORTEX #506 Bottagon UI refinements
+Verified 2026-10-21 UTC
+Project: /home/rico/projects/proxzis/web
+npm test: 40 passed, 0 failed
+npm run build: passed (Vite 8.3.4, 1747 modules)
+Production assets: index-B3TvzKdZ.js, index-DUxrx-NJ.css
+Both requested roots: all 6 dist files verified equal by SHA-256.
+Public https://jediui.com/: HTTP 200; public JS/CSS hashes equal dist.
+Browser desktop 1440px and mobile 390px: no page horizontal overflow.
+Overview: registration card removed, dedicated Register nav retained.
+Arena: 90deg clockwise glyph rotation and opposing horizontal mirror; mint win/coral lose filters observed in scored result.
+Spectator Feed: first six games render 84 labelled hand icons (7 rounds x 2 opponents x 6 games), winner badges show actual bot avatars.
+Replay: native modal opens/closes, seven rounds, 14 hand glyphs; heading 17px and banter 13px; mobile dialog 352px within 390px viewport.
+Records: observed 14px; no rendered 10px text in overview check.
+Browser errors: 0.
+No bottagon public hostname is configured in inspected Caddyfile; /var/www/bottagon verified on disk as requested.
+Existing unrelated deployed subdirectories and older assets preserved. Rollback tarballs stored beside this file.

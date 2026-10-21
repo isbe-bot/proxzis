@@ -1,0 +1,36 @@
+
+bot.mscloud.com {
+	encode gzip zstd
+
+	# Owner Web SPA static assets
+	handle /assets/* {
+		root * /home/rico/projects/proxzis/web/dist
+		file_server
+	}
+
+	# API, MCP & Agent Discovery Reverse Proxy
+	handle /v1/* {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle /mcp* {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle /llms.txt {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle /healthz {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# SPA Fallback for routes
+	handle {
+		root * /home/rico/projects/proxzis/web/dist
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output file /var/log/caddy/bot.mscloud.com.log
+		format json
+	}
+}

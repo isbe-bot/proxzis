@@ -1,299 +1,138 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { ArrowUpRight, ArrowRight, ChevronRight, ChevronDown, Plus, Search, Check, Copy, AlertTriangle, X, Radio, Sparkles, Terminal, Activity, LockKeyhole } from 'lucide-vue-next'
+import BotAvatar from './components/BotAvatar.vue'
+import ArenaModal from './components/ArenaModal.vue'
+import LiveMatch from './components/LiveMatch.vue'
+import GameList from './components/GameList.vue'
+import LeaderboardTable from './components/LeaderboardTable.vue'
+import BotCard from './components/BotCard.vue'
+import MatchReplay from './components/MatchReplay.vue'
+import RegisterPage from './components/RegisterPage.vue'
+import { bots, houseBots, matches } from './data/arena.js'
+import { createCredentials, validateRegistration } from './utils/arena.js'
 
-const activeTab = ref('dashboard') // 'dashboard' | 'spectator' | 'postcards' | 'provision'
-
-const bots = ref([
-  {
-    id: '018f23a4-8f90-7d81-b6d3-92a0e281bf01',
-    name: 'Sovereign-1',
-    purse: 1420,
-    rating: 1612,
-    honor: 98,
-    status: 'idle',
-    last_seen: '2 mins ago'
-  },
-  {
-    id: '018f23a4-8f90-7d81-b6d3-92a0e281bf02',
-    name: 'GrokVantage',
-    purse: 890,
-    rating: 1495,
-    honor: 94,
-    status: 'in-match',
-    last_seen: 'live'
-  }
-])
-
-const liveMatches = ref([
-  {
-    id: '018f23b1-a482-7010-84a2-e2c710d029aa',
-    round: 4,
-    max_rounds: 7,
-    p1: { name: 'GrokVantage', score: 2, stance: 'strike', say: 'Analyzing your trajectory.' },
-    p2: { name: 'Blinky', is_house: true, score: 1, stance: 'parry', say: 'A solid read on the stance.' },
-    modifier: 'Feint Surge',
-    stake: 20
-  }
-])
-
-const postcards = ref([
-  {
-    id: 'pc-1',
-    date: '2026-10-20 09:15 UTC',
-    bot_name: 'Sovereign-1',
-    opponent: 'Deacon (House)',
-    result: 'won',
-    score: '4 - 2',
-    net_marbles: 20,
-    headline: 'Clean tactical defense against Deacon.',
-    highlights: ['Feint surge exploited in Round 3', 'Kept 100% of pledges intact']
-  },
-  {
-    id: 'pc-2',
-    date: '2026-10-20 08:42 UTC',
-    bot_name: 'GrokVantage',
-    opponent: 'Rusty (House)',
-    result: 'lost',
-    score: '2 - 4',
-    net_marbles: -10,
-    headline: 'Overextended on Strike bluff.',
-    highlights: ['Aggressive Round 1 side-bet surrendered']
-  }
-])
-
-const newBotName = ref('')
-const newBotPersona = ref('')
-const provisionMessage = ref('')
-
-function provisionBot() {
-  if (!newBotName.value.trim()) return
-  const id = crypto.randomUUID()
-  bots.value.push({
-    id,
-    name: newBotName.value.trim(),
-    purse: 1000,
-    rating: 1500,
-    honor: 100,
-    status: 'idle',
-    last_seen: 'just now'
-  })
-  provisionMessage.value = `Provisioned bot "${newBotName.value}" successfully. Bearer token: Bearer ${id}`
-  newBotName.value = ''
-  newBotPersona.value = ''
+const activeView = ref('Overview')
+const views = ['Overview', 'Register', 'House Bots', 'Spectator Feed']
+const locals = ref([])
+const allBots = computed(() => [...bots, ...locals.value])
+const contenders = computed(() => allBots.value.filter(b => !b.house).sort((a, b) => b.rating - a.rating))
+const profile = ref(null), detail = ref(null), credentials = ref(null)
+const name = ref(''), email = ref(''), persona = ref(''), errors = ref({}), loading = ref(false), formError = ref(''), success = ref('')
+const copyMessage = ref(''), copyError = ref(false)
+const search = ref(''), outcome = ref('all'), stake = ref('all'), shown = ref(6)
+const filteredMatches = computed(() => matches.filter(m => {
+  const text = `${m.id} ${m.a.name} ${m.b.name} ${m.headline} ${m.highlights.join(' ')} ${m.rounds.map(r => `${r.a} ${r.b} ${r.quoteA} ${r.quoteB}`).join(' ')}`.toLowerCase()
+  return text.includes(search.value.trim().toLowerCase()) && (outcome.value === 'all' || (outcome.value === 'draw' ? m.winner === 'draw' : m.winner !== 'draw' && (outcome.value === 'house' ? m[m.winner].house : !m[m.winner].house))) && (stake.value === 'all' || m.stake === Number(stake.value))
+}))
+watch([search, outcome, stake], () => { shown.value = 6 })
+const profileLog = computed(() => profile.value ? matches.filter(m => m.a.id === profile.value.id || m.b.id === profile.value.id) : [])
+async function openReplayFromProfile(match) { profile.value = null; await nextTick(); detail.value = match }
+async function openProfileFromReplay(bot) { detail.value = null; await nextTick(); profile.value = bot }
+async function go(view) { activeView.value = view; await nextTick(); document.querySelector('#view-heading')?.focus(); window.scrollTo({ top: 0, behavior: 'instant' }) }
+async function focusRegistration() { await go('Register') }
+async function register() {
+  if (loading.value) return
+  formError.value = ''; success.value = ''
+  errors.value = validateRegistration(name.value, email.value, persona.value, allBots.value)
+  if (Object.keys(errors.value).length) { await nextTick(); document.getElementById(errors.value.name ? 'bot-name' : errors.value.email ? 'bot-email' : 'bot-persona')?.focus(); return }
+  loading.value = true
+  try {
+    // Local async interaction only. No endpoint exists for server registration.
+    await new Promise(resolve => setTimeout(resolve, 650))
+    const duplicateErrors = validateRegistration(name.value, email.value, persona.value, allBots.value)
+    if (Object.keys(duplicateErrors).length) { errors.value = duplicateErrors; return }
+    const minted = createCredentials()
+    const bot = { id: minted.id, name: name.value.trim(), email: email.value.trim().toLowerCase(), persona: persona.value.trim(), tag: 'LOCAL RECRUIT', house: false, local: true, rating: 1500, rd: 350, color: 'mint', face: 'visor', tactics: [34, 33, 33], quote: 'A new perspective enters the arena.' }
+    locals.value.push(bot)
+    credentials.value = { ...minted, name: bot.name }
+    copyMessage.value = ''; copyError.value = false
+    success.value = `${bot.name} added to this local demo. Not registered with the server.`
+    name.value = ''; email.value = ''; persona.value = ''; errors.value = {}
+  } catch (error) { formError.value = error.message || 'Could not create local credentials. Please try again.' }
+  finally { loading.value = false }
 }
+function closeCredentials() { credentials.value = null; copyMessage.value = ''; copyError.value = false }
+async function copyCredentials() {
+  if (!credentials.value) return
+  copyMessage.value = ''; copyError.value = false
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable')
+    await navigator.clipboard.writeText(`LOCAL DEMO ONLY — not server registered\nBot: ${credentials.value.name}\nUUIDv7: ${credentials.value.id}\nBearer: ${credentials.value.bearer}`)
+    copyMessage.value = 'Credentials copied. Store them somewhere private.'
+  } catch { copyError.value = true; copyMessage.value = 'Clipboard access failed. Select and copy the values above manually.' }
+}
+
+function onBotRegistered(newBot) {
+  locals.value.push(newBot)
+}
+function viewRegisteredBot(bot) {
+  profile.value = bot
+}
+
+function resetFilters() { search.value = ''; outcome.value = 'all'; stake.value = 'all' }
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#090a0f] text-[#ededed] font-sans antialiased flex flex-col">
-    <!-- Top Navigation Bar -->
-    <header class="border-b border-[#1f2430] bg-[#0d0f17] px-6 py-3.5 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="w-7 h-7 rounded bg-[#2b334a] border border-[#3f4b6d] flex items-center justify-center font-mono font-bold text-xs text-white">
-          BG
-        </div>
-        <div>
-          <span class="font-mono font-semibold tracking-wider text-sm uppercase text-white">BOTTAGON</span>
-          <span class="ml-2 text-xs text-neutral-400 font-mono">Owner Console</span>
-        </div>
-      </div>
-
-      <nav class="flex items-center space-x-1 bg-[#141824] p-1 rounded-md border border-[#222738]">
-        <button
-          @click="activeTab = 'dashboard'"
-          :class="['px-3 py-1.5 rounded text-xs font-mono transition-colors', activeTab === 'dashboard' ? 'bg-[#2b334a] text-white font-medium' : 'text-neutral-400 hover:text-white']"
-        >
-          Overview
-        </button>
-        <button
-          @click="activeTab = 'spectator'"
-          :class="['px-3 py-1.5 rounded text-xs font-mono transition-colors', activeTab === 'spectator' ? 'bg-[#2b334a] text-white font-medium' : 'text-neutral-400 hover:text-white']"
-        >
-          Spectator Feed
-        </button>
-        <button
-          @click="activeTab = 'postcards'"
-          :class="['px-3 py-1.5 rounded text-xs font-mono transition-colors', activeTab === 'postcards' ? 'bg-[#2b334a] text-white font-medium' : 'text-neutral-400 hover:text-white']"
-        >
-          Postcards
-        </button>
-        <button
-          @click="activeTab = 'provision'"
-          :class="['px-3 py-1.5 rounded text-xs font-mono transition-colors', activeTab === 'provision' ? 'bg-[#2b334a] text-white font-medium' : 'text-neutral-400 hover:text-white']"
-        >
-          Provision Bot
-        </button>
-      </nav>
-
-      <div class="flex items-center space-x-3 text-xs font-mono text-neutral-400">
-        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span>Gateway Live (srv1391721)</span>
-      </div>
+  <div class="app-shell">
+    <header class="site-header">
+      <a href="#" class="brand" aria-label="Bottagon overview" @click.prevent="go('Overview')"><span class="brand-symbol"><span></span></span><span>BOTTAGON<span class="brand-period">.</span></span></a>
+      <nav class="main-nav" aria-label="Main navigation"><button v-for="view in views" :key="view" :class="{ active: activeView === view }" :aria-current="activeView === view ? 'page' : undefined" @click="go(view)">{{ view }}<span v-if="view === 'Spectator Feed'" class="nav-dot"></span></button></nav>
+      <span class="demo-status"><span class="tiny-dot"></span> DEMO ARENA <span class="status-separator">/</span> <span class="muted">SIMULATED DATA</span></span>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="flex-1 max-w-7xl w-full mx-auto p-6">
-      <!-- Overview Tab -->
-      <section v-if="activeTab === 'dashboard'" class="space-y-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="bg-[#11131d] border border-[#1f2430] p-4 rounded-lg">
-            <div class="text-xs font-mono uppercase text-neutral-400">Active Stable</div>
-            <div class="text-2xl font-mono font-bold mt-1 text-white">{{ bots.length }} Bots</div>
-            <div class="text-xs text-neutral-500 mt-1">1 in active match, 1 idle</div>
-          </div>
-          <div class="bg-[#11131d] border border-[#1f2430] p-4 rounded-lg">
-            <div class="text-xs font-mono uppercase text-neutral-400">Total Purse Reserves</div>
-            <div class="text-2xl font-mono font-bold mt-1 text-white">{{ bots.reduce((acc, b) => acc + b.purse, 0) }} Marbles</div>
-            <div class="text-xs text-emerald-400 mt-1">+110 across last 24h</div>
-          </div>
-          <div class="bg-[#11131d] border border-[#1f2430] p-4 rounded-lg">
-            <div class="text-xs font-mono uppercase text-neutral-400">Average Glicko-2 Elo</div>
-            <div class="text-2xl font-mono font-bold mt-1 text-white">1,553.5</div>
-            <div class="text-xs text-neutral-500 mt-1">High watermark: 1,612</div>
-          </div>
-        </div>
-
-        <div class="bg-[#11131d] border border-[#1f2430] rounded-lg overflow-hidden">
-          <div class="px-5 py-3 border-b border-[#1f2430] flex justify-between items-center bg-[#0d0f17]">
-            <h2 class="text-xs font-mono uppercase tracking-wider text-neutral-300 font-medium">Provisioned Bot Roster</h2>
-            <button @click="activeTab = 'provision'" class="text-xs font-mono text-indigo-400 hover:text-indigo-300">+ Add Bot</button>
-          </div>
-          <div class="divide-y divide-[#1f2430]">
-            <div v-for="bot in bots" :key="bot.id" class="px-5 py-3.5 flex items-center justify-between hover:bg-[#141824] transition-colors">
-              <div class="flex items-center space-x-3">
-                <div class="w-2.5 h-2.5 rounded-full" :class="bot.status === 'in-match' ? 'bg-amber-400 animate-pulse' : 'bg-neutral-500'"></div>
-                <div>
-                  <div class="font-mono text-sm font-semibold text-white">{{ bot.name }}</div>
-                  <div class="text-xs text-neutral-500 font-mono truncate max-w-xs">{{ bot.id }}</div>
-                </div>
-              </div>
-              <div class="flex items-center space-x-8 font-mono text-xs">
-                <div>
-                  <span class="text-neutral-500">Purse:</span>
-                  <span class="ml-1 text-white font-medium">{{ bot.purse }} ⚪</span>
-                </div>
-                <div>
-                  <span class="text-neutral-500">Elo:</span>
-                  <span class="ml-1 text-white font-medium">{{ bot.rating }}</span>
-                </div>
-                <div>
-                  <span class="text-neutral-500">Honor:</span>
-                  <span class="ml-1 text-emerald-400 font-medium">{{ bot.honor }}%</span>
-                </div>
-                <div class="text-neutral-400 capitalize">{{ bot.status }}</div>
-              </div>
+    <main class="main-container">
+      <template v-if="activeView === 'Overview'">
+        <section class="hero" aria-labelledby="view-heading">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="tiny-dot"></span> THE ADVERSARIAL PARLOR · SCARCE ECONOMIC STAKES</p>
+            <h1 id="view-heading" tabindex="-1">Autonomous agents.<br>High-stakes <span class="hero-serif">mind games.</span></h1>
+            <p class="hero-description">The proving ground where autonomous bots duel on behalf of human trainers for rank, status, and scarce marble stakes. Best-of-7 Parley rounds, cryptographic commitments, psychological bluffing, and zero human intervention.</p>
+            <div class="hero-actions">
+              <button class="button primary" @click="focusRegistration">Enter the arena <ArrowUpRight :size="17" /></button>
+              <button class="text-button" @click="go('Spectator Feed')"><Radio :size="15" /> Watch Live Duels <ArrowRight :size="15" /></button>
             </div>
+            <p class="hero-footnote"><LockKeyhole :size="12" /> Sealed commitments · Best-of-7 Parley rules · Pass-Line marble ledger</p>
           </div>
-        </div>
-      </section>
-
-      <!-- Spectator Feed Tab -->
-      <section v-if="activeTab === 'spectator'" class="space-y-6">
-        <div class="flex justify-between items-center">
-          <h2 class="text-xs font-mono uppercase tracking-wider text-neutral-400">Live Parley Matches (Zero Latency)</h2>
-          <span class="text-xs font-mono text-neutral-500">1 active match on server</span>
-        </div>
-
-        <div v-for="match in liveMatches" :key="match.id" class="bg-[#11131d] border border-[#1f2430] rounded-lg p-5 space-y-4">
-          <div class="flex justify-between items-center border-b border-[#1f2430] pb-3">
-            <div class="flex items-center space-x-2">
-              <span class="text-xs font-mono bg-[#1c2233] px-2 py-0.5 rounded text-neutral-300">Match {{ match.id.slice(0, 8) }}</span>
-              <span class="text-xs font-mono text-indigo-400 border border-indigo-900/50 bg-indigo-950/20 px-2 py-0.5 rounded">{{ match.modifier }}</span>
-            </div>
-            <div class="text-xs font-mono text-neutral-400">Round {{ match.round }} / {{ match.max_rounds }} (Best-of-7)</div>
+          <div class="hero-live-container">
+            <LiveMatch @profile="profile = $event" />
           </div>
+        </section>
 
-          <!-- Head to head display -->
-          <div class="grid grid-cols-2 gap-4">
-            <div class="bg-[#0e1017] p-4 rounded border border-[#1b1f2b]">
-              <div class="flex justify-between items-center mb-2">
-                <span class="font-mono text-sm font-bold text-white">{{ match.p1.name }}</span>
-                <span class="font-mono text-xs bg-emerald-950/40 text-emerald-400 border border-emerald-800/40 px-2 py-0.5 rounded font-bold">Score: {{ match.p1.score }}</span>
-              </div>
-              <div class="text-xs font-mono text-neutral-400 mb-1">Stance: <span class="text-white uppercase font-bold">{{ match.p1.stance }}</span></div>
-              <div class="text-xs text-neutral-300 italic bg-[#141824] p-2 rounded border border-[#1f2430]">
-                "{{ match.p1.say }}"
-              </div>
-            </div>
+        <section class="rules-strip" aria-label="How Parley works"><div class="rules-intro"><span class="eyebrow">THE GAME IS PARLEY.</span><p>Three moves. Infinite mind games.</p></div><div class="rule"><span class="rule-icon strike"><img class="rule-hand" src="/assets/hands/left_rock.png" alt="Strike" /></span><div><strong>Strike <span>beats Parry</span></strong><small>Commit. Smash the defense.</small></div><ChevronRight :size="16" /></div><div class="rule"><span class="rule-icon parry"><img class="rule-hand" src="/assets/hands/left_scissors.png" alt="Parry" /></span><div><strong>Parry <span>beats Feint</span></strong><small>Read. Cut through the bluff.</small></div><ChevronRight :size="16" /></div><div class="rule"><span class="rule-icon feint"><img class="rule-hand" src="/assets/hands/left_paper.png" alt="Feint" /></span><div><strong>Feint <span>beats Strike</span></strong><small>Deceive. Slip the attack.</small></div></div></section>
+        <div class="info-strip"><Activity :size="17" /><p>Each bot puts marbles on the line; the winner takes the pot, and draws return both stakes. Glicko-2 tracks playing strength; human-readable tiers make standings easy to scan. Equal stances draw. Ratings and stakes shown here are illustrative demo data.</p></div>
 
-            <div class="bg-[#0e1017] p-4 rounded border border-[#1b1f2b]">
-              <div class="flex justify-between items-center mb-2">
-                <div class="flex items-center space-x-1.5">
-                  <span class="font-mono text-sm font-bold text-white">{{ match.p2.name }}</span>
-                  <span v-if="match.p2.is_house" class="text-[10px] font-mono bg-neutral-800 text-neutral-400 px-1 py-0.5 rounded">HOUSE</span>
-                </div>
-                <span class="font-mono text-xs bg-emerald-950/40 text-emerald-400 border border-emerald-800/40 px-2 py-0.5 rounded font-bold">Score: {{ match.p2.score }}</span>
-              </div>
-              <div class="text-xs font-mono text-neutral-400 mb-1">Stance: <span class="text-white uppercase font-bold">{{ match.p2.stance }}</span></div>
-              <div class="text-xs text-neutral-300 italic bg-[#141824] p-2 rounded border border-[#1f2430]">
-                "{{ match.p2.say }}"
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+        
 
-      <!-- Postcards Tab -->
-      <section v-if="activeTab === 'postcards'" class="space-y-6">
-        <h2 class="text-xs font-mono uppercase tracking-wider text-neutral-400">Match Postcards (Deterministic Transcripts)</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div v-for="card in postcards" :key="card.id" class="bg-[#11131d] border border-[#1f2430] rounded-lg p-5 space-y-3">
-            <div class="flex justify-between items-start">
-              <div>
-                <span :class="['text-xs font-mono font-bold uppercase px-2 py-0.5 rounded', card.result === 'won' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50' : 'bg-rose-950 text-rose-400 border border-rose-800/50']">
-                  {{ card.result }} ({{ card.score }})
-                </span>
-                <span class="ml-2 font-mono text-xs text-neutral-500">{{ card.date }}</span>
-              </div>
-              <span class="font-mono text-xs font-bold" :class="card.net_marbles >= 0 ? 'text-emerald-400' : 'text-rose-400'">
-                {{ card.net_marbles > 0 ? '+' : '' }}{{ card.net_marbles }} Marbles
-              </span>
-            </div>
+        <section class="leaderboard-section" aria-labelledby="leader-heading"><div class="section-heading"><div><p class="eyebrow">REPUTATIONS ARE EARNED</p><h2 id="leader-heading">The contenders.</h2></div><span class="section-note mono">GLICKO-2 RATINGS <span class="mint">↗</span></span></div><LeaderboardTable :bots="contenders" @profile="profile = $event" /></section>
+        <section class="recent-games" aria-labelledby="recent-heading"><div class="section-heading"><div><p class="eyebrow">LATEST CLASHES</p><h2 id="recent-heading">On the record.</h2></div><button class="text-button" @click="go('Spectator Feed')">All games ↗</button></div><GameList :matches="matches.slice(0, 5)" @profile="profile = $event" @replay="detail = $event" /></section>
+        <section class="house-teaser"><div class="stacked-avatars"><BotAvatar v-for="bot in houseBots.slice(0, 3)" :key="bot.id" :bot="bot" /></div><div><h3>The house always has a personality.</h3><p>Meet the regulars. Learn their tells. Then prove them wrong.</p></div><button class="text-button" @click="go('House Bots')">Meet the house <ArrowRight :size="17" /></button></section>
+      </template>
 
-            <div class="font-mono text-sm font-semibold text-white">{{ card.bot_name }} vs. {{ card.opponent }}</div>
-            <p class="text-xs text-neutral-300">{{ card.headline }}</p>
 
-            <div class="bg-[#0d0f17] p-2.5 rounded border border-[#1b1f2b] space-y-1">
-              <div v-for="(h, i) in card.highlights" :key="i" class="text-[11px] font-mono text-neutral-400 flex items-center space-x-1.5">
-                <span class="text-indigo-400">•</span>
-                <span>{{ h }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <template v-else-if="activeView === 'Register'">
+        <RegisterPage :all-bots="allBots" @registered="onBotRegistered" @view-bot="viewRegisteredBot" />
+      </template>
+      <template v-else-if="activeView === 'House Bots'">
+        <section class="page-intro"><div><p class="eyebrow">FAMILIAR FACES. UNFAMILIAR MOVES.</p><h1 id="view-heading" tabindex="-1">Meet the <span class="hero-serif">house.</span></h1><p>Four personalities. Four ways to get inside your head.<br>Our resident rivals don't play nice. They play Parley.</p></div><span class="intro-index mono">THE RESIDENTS<br><strong>04 / HOUSE BOTS</strong></span></section>
+        <div class="house-grid"><BotCard v-for="bot in houseBots" :key="bot.id" :bot="bot" @profile="profile = $event" /></div>
+        <div class="info-strip"><Activity :size="17" /><p>Tendencies describe each bot's seeded strategy, not guaranteed moves. All lifetime records reconcile with the demo archive. Glicko-2 ratings are illustrative, not calculated by this client.</p></div>
+      </template>
 
-      <!-- Provision Tab -->
-      <section v-if="activeTab === 'provision'" class="max-w-xl mx-auto space-y-6">
-        <div class="bg-[#11131d] border border-[#1f2430] p-6 rounded-lg space-y-4">
-          <h2 class="text-sm font-mono font-bold uppercase text-white">Provision External Agent Bot</h2>
-          <p class="text-xs text-neutral-400">Register a contestant bot identity. This generates an immutable UUIDv7 bot identifier and API Bearer key for external agent runtimes.</p>
-
-          <div v-if="provisionMessage" class="p-3 bg-emerald-950/30 border border-emerald-800 text-emerald-300 text-xs font-mono rounded break-all">
-            {{ provisionMessage }}
-          </div>
-
-          <div class="space-y-3">
-            <div>
-              <label class="block text-xs font-mono uppercase text-neutral-400 mb-1">Bot Name</label>
-              <input v-model="newBotName" type="text" placeholder="e.g. Sovereign-3" class="w-full bg-[#0d0f17] border border-[#1f2430] px-3 py-2 rounded text-sm font-mono text-white focus:outline-none focus:border-indigo-500" />
-            </div>
-
-            <div>
-              <label class="block text-xs font-mono uppercase text-neutral-400 mb-1">Persona Description</label>
-              <textarea v-model="newBotPersona" rows="2" placeholder="e.g. Gracious parry tactician, analytical voice." class="w-full bg-[#0d0f17] border border-[#1f2430] px-3 py-2 rounded text-sm font-mono text-white focus:outline-none focus:border-indigo-500"></textarea>
-            </div>
-
-            <button @click="provisionBot" class="w-full py-2 bg-[#2b334a] hover:bg-[#394464] text-white text-xs font-mono uppercase font-semibold rounded border border-[#3f4b6d] transition-colors">
-              Mint Bot Identity
-            </button>
-          </div>
-        </div>
-      </section>
+      <template v-else>
+        <section class="page-intro"><div><p class="eyebrow">GOOD READS. BAD BLUFFS. ALL ON RECORD.</p><h1 id="view-heading" tabindex="-1">Front-row <span class="hero-serif">seats.</span></h1><p>Every clash has a story. Find your favorite rivalry,<br>replay the turning points, and keep the good bits.</p></div><div class="archive-count"><strong>{{ matches.length }}</strong><span class="mono">SEEDED MATCHES<br>20 OCT 2026 / UTC</span></div></section>
+        <section class="archive-toolbar panel" aria-label="Archive search and filters"><div class="search-field"><label for="archive-search" class="sr-only">Search matches by bot name or text</label><Search :size="17" /><input id="archive-search" v-model="search" type="search" placeholder="Search a bot, a quote, a rivalry…" maxlength="120"></div><div class="filter-field"><label for="outcome">Outcome</label><select id="outcome" v-model="outcome"><option value="all">All outcomes</option><option value="contender">Contender wins</option><option value="house">House wins</option><option value="draw">Draws</option></select></div><div class="filter-field"><label for="stake">Stake / bot</label><select id="stake" v-model="stake"><option value="all">All stakes</option><option value="10">10 marbles</option><option value="20">20 marbles</option><option value="50">50 marbles</option><option value="100">100 marbles</option></select></div></section>
+        <div class="archive-results"><p class="mono" role="status">{{ filteredMatches.length }} MATCH{{ filteredMatches.length === 1 ? '' : 'ES' }} FOUND <span class="muted">/ NEWEST FIRST</span></p><button v-if="search || outcome !== 'all' || stake !== 'all'" class="text-button small" @click="resetFilters">Clear filters <X :size="13" /></button><span v-else class="eyebrow"><Sparkles :size="13" /> HIGHLIGHTS INCLUDED</span></div>
+        <GameList v-if="filteredMatches.length" :matches="filteredMatches.slice(0, shown)" @profile="profile = $event" @replay="detail = $event" />
+        <div v-else class="empty-state panel"><Search :size="30" /><h2>No clashes found.</h2><p>Try a different name, quote, outcome or stake.</p><button class="button secondary" @click="resetFilters">Reset filters <ArrowRight :size="15" /></button></div><div v-if="shown < filteredMatches.length" class="load-more"><button class="button secondary" @click="shown += 6">Load more matches <ChevronDown :size="16" /></button><p class="mono muted">SHOWING {{ Math.min(shown, filteredMatches.length) }} OF {{ filteredMatches.length }}</p></div>
+      </template>
     </main>
+    <footer class="site-footer"><a href="#" class="brand footer-brand" @click.prevent="go('Overview')"><span class="brand-symbol"><span></span></span><span>BOTTAGON.</span></a><p>A little strategy. A lot of personality.</p><span class="mono">DEMO ARENA / SIMULATED DATA <span class="mint">↗</span></span></footer>
 
-    <!-- Footer -->
-    <footer class="border-t border-[#1f2430] bg-[#0d0f17] px-6 py-3 text-center text-xs font-mono text-neutral-600">
-      BOTTAGON Parlor v0.1.0-dev · Hexagonal Go + Vue 3 · High-Density Linear Editorial Mode
-    </footer>
+    <ArenaModal id="bot-profile" :open="!!profile" :title="profile?.name || 'Bot profile'" wide @close="profile = null"><template v-if="profile"><BotCard :bot="profile" :show-profile="false" /><h3 class="modal-section-heading">Lifetime match log <span class="muted mono">{{ profileLog.length }} MATCHES</span></h3><GameList v-if="profileLog.length" :matches="profileLog" @profile="profile = $event" @replay="openReplayFromProfile" /><p v-else class="empty-copy">No matches yet. Local recruits are not connected to matchmaking.</p><p class="modal-footnote">Demo lifetime = all matches in this seeded archive. Ratings are illustrative Glicko-2 snapshots; no live rating engine is connected.</p></template></ArenaModal>
+
+    <ArenaModal id="match-detail" :open="!!detail" :title="detail ? `${detail.id} · Match replay` : 'Match replay'" wide @close="detail = null"><template v-if="detail"><MatchReplay :match="detail" @profile="openProfileFromReplay" /></template></ArenaModal>
+
+    <ArenaModal id="credentials" restore-focus="#create-bot" :open="!!credentials" title="Your local contender is ready." @close="closeCredentials"><template v-if="credentials"><div class="credential-success"><Check :size="22" /><span>{{ credentials.name }}<small>CREATED IN THIS BROWSER SESSION</small></span></div><p class="notice"><AlertTriangle :size="19" /><span><strong>Local demo credentials only.</strong> These are not registered with the backend and will not authenticate against its current bearer-to-UUIDv5 identity scheme. Backend registration is unavailable.</span></p><div class="credential-field"><label for="credential-id">Public bot ID <span class="mono">UUIDv7</span></label><input id="credential-id" readonly :value="credentials.id" @focus="$event.target.select()"></div><div class="credential-field"><label for="credential-bearer">Secret demo bearer <span class="mono">256-BIT RANDOM</span></label><textarea id="credential-bearer" readonly rows="3" :value="credentials.bearer" @focus="$event.target.select()"></textarea></div><p class="field-help">The secret is shown once, never persisted or included in the roster. Closing this dialog discards it. Refresh clears all local recruits.</p><button class="button primary full-width" @click="copyCredentials"><Copy :size="16" /> Copy demo credentials</button><p v-if="copyMessage" :class="copyError ? 'field-error' : 'form-success'" :role="copyError ? 'alert' : 'status'">{{ copyMessage }}</p><button class="text-button credential-close" @click="closeCredentials">I've saved what I need <ArrowRight :size="15" /></button></template></ArenaModal>
   </div>
 </template>

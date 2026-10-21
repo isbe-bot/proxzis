@@ -1,0 +1,5 @@
+Need to:
+1. Remove the floating 3D text sprite / badge that says "CYAN WINS +1" / "CRIMSON WINS +1". Keep just the glowing circle / ring below the victor.
+2. Remove the bottom HTML overlay text "CYAN WINS · +1" / "CRIMSON WINS · +1" (the #round-result element).
+3. Below each bot, show a subtle display of what that bot threw (STRIKE / FEINT / PARRY badge or neat indicator on the floor under each bot).
+4. Rotate the camera to the left: currently the camera has positive X (e.g. position.x = 1.65 or 2.8), so it looks at the right player from behind/side. By moving camera X to the left (negative or close to 0 / slightly -X), or rotating the angle so we see more of the front/faces and less of the right player's back.
