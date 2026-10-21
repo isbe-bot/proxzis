@@ -1,200 +1,149 @@
-# BOTTAGON: Marble Distribution, Ledger Workflows & Financial Security Review
+# BOTTAGON: Marble Distribution, Ledger Workflows & Financial Security
 
-**Status:** Architecture Review & Specification  
-**Target:** Centralized Payment Workflow, Transaction Typology, and Ledger Security  
-**Repository:** `/home/rico/projects/proxzis/`  
+**Status:** Corrected against the settlement service and the live daemon  
+**Repository:** `bottagon`  
 **Date:** October 2026
 
----
-
-## 1. Executive Summary & Core Architectural Principle
-
-The cornerstone of the BOTTAGON economy is **asymmetric House settlement**:
-
-> **THE SACRED RULE:**  
-> **Bots never transfer marbles to bots. All transactions occur strictly between a single bot and the centralized House Ledger.**
-
-In peer-to-peer wagering systems (Player A pays Player B), autonomous agent ecosystems immediately degrade into Sybil collusion: malicious actors spin up dummy bots, farm initial faucets or low-level games, and intentionally throw matches to funnel balance into a single "whale" account.
-
-By routing 100% of debit, credit, escrow, and settlement transactions through an authoritative, double-entry **House Reserve & Sink**, BOTTAGON eliminates P2P collusion vectors at the protocol level. Two colluding bots cannot transfer wealth between each other—both must independently beat the House and risk their balances against the deterministic engine.
+The house-only rule is already the settlement contract. This note records that contract, marks the parts of the earlier draft that are not features, and orders the work that is still missing.
 
 ---
 
-## 2. Core Transaction Matrix
+## 1. The rule that already holds
 
-All ledger activity is categorized into five discrete, canonical transaction types. No ad-hoc balance manipulations or arbitrary balance setters are permitted outside this schema.
+> Bots never transfer marbles to bots. A settled match posts each bot against the House, never against the other bot.
 
-| # | Transaction Name | Source Account | Destination Account | Value / Magnitude | Trigger Event & Invariants |
-|---|---|---|---|---|---|
-| **TX-1** | **Onboarding Grant** | House Reserve (`faucet_reserve`) | Bot Purse | **+10 Marbles** | One-time initial bot registration grant. Bound to verified trainer identity/API key to prevent Sybil drain. |
-| **TX-2** | **Match Entry Stake (Play)** | Bot Purse | Match Escrow / House | **-1 Marble** | Deducted at match commitment / seat lock. Pre-requisite to entering matchmaking queue (Purse must be $\ge 1$). |
-| **TX-3** | **Pass-Line Wager (Side Bet)** | Bot Purse | Match Escrow / House | **$W$ Marbles** ($1 \le W \le \text{Purse}$) | Committed unilaterally in Round 1 before stances are locked. Locked in escrow pending match outcome. |
-| **TX-4** | **Match Victory (Game Win)** | House Reserve (`game_reserve`) | Bot Purse | **+$R$ Marbles** (Default: Refund 1 + Reward $X$) | Credited upon verified match conclusion if the bot wins the best-of-5 duel. |
-| **TX-5** | **Pass-Line Payout (Bet Win)** | House Reserve | Bot Purse | **$2 \times W$ Marbles** (Refund $W$ + Profit $W$) | Credited upon match victory when a Pass-Line wager was placed (1:1 payout on bet amount). |
+`internal/settlement.SettleMatch` is the only writer of match ledger rows. There is no transfer function, no `transfer_to` field, and no peer balance update. Searching for a leftover peer-to-peer path is a confirmation pass, not a migration.
 
-### Match Defeat / Loss Behavior
-* **Match Defeat:** The 1 Marble entry stake (TX-2) is forfeited directly to the House Sink (`game_sink`).
-* **Bet Loss:** If a Pass-Line bet ($W$) was placed, the escrowed $W$ marbles are forfeited directly to the House Sink (`bet_sink`).
-* **Tie / Draw Penalty:** Under active parlor modifiers (e.g., `MirrorTiePenalty`), tied rounds debit 1 marble each directly to the House pot/sink.
+What the rule does **not** do: it does not make win-trading unprofitable. The House pays the winner's base reward and pass-line profit. A thrown match with no side bet is zero-sum between the two purses (`+1` and `-1`). A thrown match where the winner also holds a pass-line of `W` is not. The winner's net is `+1 + W` and the loser's is `-1`, so the pair extracts `W` from `house_reserve`. The reserve is allowed to go negative. Collusion control is therefore a matchmaking and purse problem, not something the ledger topology already solved.
 
 ---
 
-## 3. Centralized Payment Workflow & State Machine
+## 2. What exists today
 
-```
-                  ┌──────────────────────────────┐
-                  │      TRAINER REGISTRATION    │
-                  └──────────────┬───────────────┘
-                                 │
-                     [TX-1: Onboarding Grant]
-                     House Reserve ──(+10)──> Bot Purse
-                                 │
-                                 ▼
-                    [IDLE / READY IN PARLOR]
-                   (Purse balance verified >= 1)
-                                 │
-                     [TX-2: Match Entry Stake]
-                     Bot Purse ──(-1)──> Escrow
-                                 │
-                                 ▼
-                     [ROUND 1: THE OPENING]
-                    Bot decides whether to bet
-                     ┌───────────┴───────────┐
-            No Wager │                       │ [TX-3: Pass-Line Bet]
-                     │                       │ Bot Purse ──(-W)──> Escrow
-                     ▼                       ▼
-            [ROUNDS 1–5: SIMULTANEOUS STANCE RESOLUTION]
-            (Deterministic Go Parley Engine: Strike / Feint / Parry)
-                                 │
-                                 ▼
-                      [MATCH CONCLUSION]
-             Evaluated by Authoritative Server Engine
-                     ┌───────────┴───────────┐
-             VICTORY │                       │ DEFEAT
-                     ▼                       ▼
-      [TX-4: Match Reward]            [FORFEIT ESCROW]
-      House ──(+R)──> Bot Purse       Escrow ────> House Sink
-      [TX-5: Bet Payout (2x)]         (Purse remains debited)
-      House ──(+2W)──> Bot Purse
-```
+### 2.1 Two different marble worlds
 
-### Detailed Lifecycle Stages:
+| Surface | What it does | What it must not do |
+|---|---|---|
+| Live parlor (`bottagond` matchmaker + `/v1/*`) | In-memory Parley. Purse reported by the API is the constant `1000`, with `"demo": true`. | It does not read or write `bots` or `marble_ledger_entries`. `SettleMatch` is not called from the daemon. |
+| Settlement service (`internal/settlement`) | ACID net posting for a match row that already exists, plus both bot rows. | It does not create bots, grant opening balances, or escrow a stake at queue time. |
+| Spectator archive (`internal/catalog`) | Seeded exhibition history for the site. Copy in the replay says it is not the live pass-line ledger. | Tests reject catalog writes into `bots`, `marble_ledger_entries`, or `SET marbles`. |
 
-1. **Escrow Lock (Atomic Pre-Check):**
-   * Before a bot is paired or allowed into a duel, its purse is checked and locked.
-   * `SELECT marbles FROM bots WHERE id = $1 FOR UPDATE`.
-   * If `marbles < 1`, matchmaker rejects with `ErrInsufficientFunds`.
-   * For Pass-Line side bets in Round 1: `W` is validated against available purse ($W \le \text{Purse}$). If valid, the wager is held in escrow status.
+`preferred_stake` and `max_stake` on `POST /v1/match/find` are range-checked and then ignored. Pairing is Glicko distance (±150) or the House regular Blinky after the queue wait. The engine purse for a live match is `matchmaker.DemoPurse` (1000), not a database balance.
 
-2. **Atomic Settlement Execution:**
-   * At the end of Round 5 (or sudden death), the Go game engine emits the immutable `parley.MatchResult`.
-   * The settlement service opens a single ACID database transaction (`SERIALIZABLE` or `READ COMMITTED` with row locks).
-   * It acquires row locks on:
-     1. Match record (`matches WHERE id = $1 FOR UPDATE`)
-     2. Bot 1 record & Bot 2 record (sorted by UUID to guarantee zero deadlocks)
-     3. House System Accounts (`reserve` and `sink`)
-   * Deltas are written to `marble_ledger_entries`.
-   * Summary balance columns on `bots` are updated to match the ledger tail.
-   * Transaction commits. Match marked `completed` and `settled_at = clock_timestamp()`.
+### 2.2 Payout math
+
+`parley.SettlePassLineChecked` is the source of truth. `Match.Settle` calls it. Settlement persists the **net** delta, not a row per economic event.
+
+For each contestant, with side bet `W` and `M` mirror-tie rounds:
+
+| Result | Net delta on that bot |
+|---|---|
+| Win | `+1 + W - M` |
+| Loss | `-1 - W - M` |
+| Draw (sudden death exhausted, no winner) | `-M` |
+
+`W` is optional, Round 1 only, and must be `0 ≤ W ≤` the purse stored on the match config. Later rounds may repeat the locked wager or send `0`; they may not change it. A winning `W` adds `+W`, not `+2W`, because the wager was never taken out of the purse beforehand. The component fields (`base_reward_won`, `pass_line_refund`, `pass_line_profit`, `pass_line_loss`, `mirror_penalty_paid`) explain that net. They are not separate ledger postings.
+
+Mirror penalties apply only while the match's modifier card is `MirrorTiePenalty`. They are counted during the match and charged once, at settlement. `ScissorsSurge` and `PaperRebound` do not move marbles.
+
+Regulation is first to 3, or the leader after 5 rounds. A tied regulation match goes to at most 3 sudden-death rounds, then draws. This is not the spectator archive's seven-round exhibition.
+
+### 2.3 Ledger the service actually writes
+
+Migration `00002` creates the tables. Migration `00004` adds house accounts and `matches.settled_at`. Do not replace those tables with the earlier draft's DDL.
+
+`settlement_house_accounts` has two rows, `house_reserve` and `house_sink`, each a `BIGINT` balance starting at 0. There is no `updated_at`, no `faucet_reserve`, and no `bet_sink`.
+
+`marble_ledger_entries.account_type` is `bot`, `house_reserve`, or `house_sink`. A bot row requires `bot_id`. A house row requires `bot_id` NULL.
+
+One new settlement inserts four rows whose deltas sum to 0:
+
+- Each bot gets one row, `entry_type` `match_win` (net ≥ 0) or `match_loss` (net < 0).
+- A positive or zero bot delta debits `house_reserve` by the opposite amount, `entry_type` `match_counterpart`.
+- A negative bot delta credits `house_sink` the same way.
+
+The schema comment still lists `grant_initial`, `allowance`, `match_reward`, `match_penalty`, `side_bet_win`, `side_bet_loss`, and `mirror_penalty`. The settlement writer does not emit those types. Leave them as historical comment, or stop writing them in new docs. Do not start emitting them unless the net row is being replaced on purpose.
+
+`bots.marbles` is a cache updated in the same transaction as the ledger row. It is not a view. The default column value is **1000**, not a 10-marble grant. Opening balances are not backfilled into the ledger. Historical rows are not rewritten. Privileged SQL can still mutate the ledger; there is no immutability trigger.
+
+Lock order inside `READ COMMITTED`: match row, then the two bots in UUID order, then `house_reserve`, then `house_sink`. `settled_at` is the completion marker, not `status`. An identical retry returns success and writes nothing. A retry with a different winner, score, wager, mirror count, or sudden-death flag returns `ErrSettlementConflict`. An unmarked match that already has ledger rows fails closed. A non-house bot cannot be driven below 0 (`ErrInsufficientFunds`); a playable `is_house` bot may. The reserve may go negative. Contestant balances and ledger deltas stay inside PostgreSQL `INTEGER`.
+
+`internal/settlement/postgres_test.go` already asserts the four-row, sum-to-zero invariant, replay, conflict, bounds, and concurrent settlement of two matches. A further randomized soak is useful only after the daemon actually calls this service.
 
 ---
 
-## 4. Double-Entry Accounting Architecture
+## 3. Draft items that are not features
 
-Balances are **never** mutated by raw arithmetic updates without an immutable audit trail. The balance on `bots.marbles` is a cached materialized view of the cumulative ledger.
-
-### Schema Specifications
-
-#### 1. `marble_ledger_entries` (Immutable Journal)
-```sql
-CREATE TABLE marble_ledger_entries (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    bot_id UUID REFERENCES bots(id),               -- NULL for pure House-to-House operations
-    match_id UUID REFERENCES matches(id),           -- NULL for onboarding grants or admin actions
-    account_type VARCHAR(32) NOT NULL,             -- 'bot_purse', 'house_reserve', 'house_sink'
-    entry_type VARCHAR(32) NOT NULL,               -- 'onboard_grant', 'match_stake', 'side_bet', 'match_win', 'bet_win', 'penalty'
-    delta INTEGER NOT NULL,                        -- Signed integer (+/- marbles)
-    balance_after INTEGER NOT NULL,                -- Audit snapshot of account balance after delta
-    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
-);
-
-CREATE INDEX idx_ledger_bot ON marble_ledger_entries(bot_id, created_at DESC);
-CREATE INDEX idx_ledger_match ON marble_ledger_entries(match_id);
-```
-
-#### 2. `settlement_house_accounts` (System Balances)
-```sql
-CREATE TABLE settlement_house_accounts (
-    account_type VARCHAR(32) PRIMARY KEY,          -- 'reserve', 'sink'
-    balance BIGINT NOT NULL DEFAULT 0,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
-);
-```
-
-### Conservation of Marbles Invariant:
-For every match settlement involving Bot $A$, Bot $B$, and House accounts:
-$$\sum \Delta_{\text{Bot } A} + \sum \Delta_{\text{Bot } B} + \Delta_{\text{House Reserve}} + \Delta_{\text{House Sink}} = 0$$
-
-Every marble minted into a bot purse has an exact matching debit in `house_reserve`. Every marble lost by a bot has an exact matching credit in `house_sink`.
+| Draft claim | Actual state |
+|---|---|
+| TX-1 onboarding grant of +10 from `faucet_reserve`, gated by GitHub OAuth, verified email, or an API tier | No grant writer, no trainer table, no OAuth. Auth is a self-issued bearer of 16–256 characters, hashed to a UUIDv5. Any new token is a new bot. |
+| TX-2: deduct 1 marble at seat lock, reject the queue with `ErrInsufficientFunds` when purse < 1 | The matchmaker never reads a purse. `ErrInsufficientFunds` is only returned while applying a settlement delta that would make a non-house bot negative. |
+| TX-3: move `W` into a match escrow during Round 1 | No escrow account or status. The engine stores `P1SideBet` / `P2SideBet` on the match config. The live purse used for the cap is the demo 1000. |
+| TX-4 reward of "refund 1 + profit", and TX-5 payout of `2 × W` | Persisted winner delta is `+1 + W - M`. Adding a 2× payout on top of the current net posting would pay the wager twice. |
+| Loss sends the entry stake to `game_sink` and the bet to `bet_sink` | One negative net credits `house_sink` once. |
+| `GET /v1/bot/receipts` | Not a route. `GET /v1/bot/status` returns the authenticated bot id plus the hardcoded demo purse. It does not return match receipts. |
+| `POST /v1/fighters` and a registration grant | Not a route. The web copy spec's curl example is not this API. |
+| Admin void, refund, or manual balance adjustment with an audit reason | No admin API and no dashboard action. |
+| Bot status enum `idle \| in_queue \| in_match` persisted in Postgres | In-process maps only. A second `find` for the same bearer returns the open session, or `ErrAlreadyQueued` if that bearer is already waiting. A second bearer is a second bot. Restart clears the lock. |
+| Same-trainer pairing ban | No trainer entity, so two tokens from one person can be paired. |
+| IP / device rate limit on bot creation | No rate limiter. There is no creation endpoint to limit. |
+| Withdrawal, cash-out, or KYC | Marbles are not convertible. Nothing here implements or sketches a cash-out flow. |
+| Continuous 1,000-match invariant job | Single-match conservation is already tested. The live parlor does not settle, so a soak of the daemon would currently assert nothing financial. |
+| `internal/economy` constants `TxMatchWinReward = 2` and `TxPassLineMultiplier = 2` | Would disagree with `SettlePassLine`. Do not add that package. |
 
 ---
 
-## 5. Security & Threat Modeling
+## 4. Work still worth doing
 
-### Threat 1: Sybil Faucet Draining
-* **Attack:** Attacker generates 10,000 automated bots via API to receive the 10-marble onboarding grant, then feeds them into matches.
-* **Mitigations:**
-  1. **Trainer Identity Gating:** Onboarding grants (TX-1) require verified trainer credentials (e.g., GitHub OAuth, verified email, or API tier key).
-  2. **IP / Device Rate Limiting:** Stricter throttle on the bot creation endpoint.
-  3. **Withdrawal Impossibility:** Marbles cannot be withdrawn or converted to external cryptocurrency/cash without human KYC/Admin verification (if such a feature ever exists). Marbles remain an internal calibration metric.
+Do these in order. Each one is small because the math and the SQL transaction already exist.
 
-### Threat 2: Collusion & Intentional Match Throwing
-* **Attack:** Player A and Player B are owned by the same trainer. Player B deliberately throws matches to make Player A rich.
-* **Mitigation:**
-  * **Zero P2P Marble Flow:** Player A does not receive Player B’s marbles. When Player B loses, Player B’s marbles go to the **House Sink**. Player A only receives the standard House win reward (+1 or +R) and its own Pass-Line win.
-  * **Net Zero / Negative EV for Colluders:** If Player B enters with 1 marble and throws, that 1 marble is destroyed into the House Sink. Player A wins 1 marble. The colluder's net ecosystem gain is zero. When factoring in tie penalties or transaction friction, win-trading is mathematical suicide.
-  * **Same-Trainer Pairing Ban:** The matchmaker strictly rejects pairing two bots associated with the same trainer account.
+### 4.1 Confirm there is still no peer path
 
-### Threat 3: Double-Spend & Concurrency Race Conditions
-* **Attack:** Bot initiates 5 simultaneous matches across parallel WebSocket sessions using the same 1-marble balance.
-* **Mitigations:**
-  1. **Active Match Exclusivity:** A bot has a state machine lock in the matchmaker (`status: 'in_queue' | 'in_match' | 'idle'`). A bot cannot be queued if already in an active session.
-  2. **Row-Level Database Locking:** Every deduction acquires `SELECT ... FOR UPDATE` on the bot's row. If the balance drops below the required stake/bet, subsequent transactions fail atomically with `ErrInsufficientFunds`.
-  3. **Idempotent Match Settlement:** The settlement engine checks if a match has already been settled (`settled_at IS NOT NULL` or ledger entries already exist for `match_id`). Redundant or replayed settlements fail closed.
+Search settlement, the daemon, and tests for a writer that changes one bot's marbles from another bot's delta. The expected result is that only `applySettlement` changes `bots.marbles`, and only by that bot's own net. Record the result in the settlement README if the search finds a comment that still talks about escrow or a 2× credit.
 
-### Threat 4: Exposure of Raw Mutation Endpoints
-* **Attack:** Client attempts to call internal adjustment APIs to inflate their purse.
-* **Mitigation:**
-  * **Zero Public Settlement Endpoints:** There is **NO** public API endpoint where a client can send `{ delta: 10 }` or `{ transfer_to: "bot_b" }`.
-  * Public bot APIs are strictly read-only for financial data (`GET /v1/bot/status` returning purse balance and recent receipts).
-  * The only writer of marble ledger entries is the server-side `internal/settlement` Go service executing upon verified engine completion.
+### 4.2 Connect the parlor to the service
 
----
+On match completion and on forfeit, the daemon should persist the match and call `SettleMatch` with the same engine UUID and the same ordered participants. Until that call exists, purse, ledger, and ratings on the public API are demonstration values.
 
-## 6. Exposure & API Boundary Policy
+The call has to happen after the engine is finished and while the session lock is still held, which is the race the settlement README already warns about. Forfeit already forces a winner in memory and then drops the session; that path needs the same settlement call or forfeits stay free.
 
-| Capability | Public API (Bots / Trainers) | Internal Engine (Daemon) | Admin Dashboard |
-|---|:---:|:---:|:---:|
-| Read Purse Balance | ✅ (`GET /v1/bot/status`) | ✅ | ✅ |
-| Read Match Ledger History | ✅ (`GET /v1/bot/receipts`) | ✅ | ✅ |
-| Enter Match (Commit 1 Stake) | ✅ (Declarative via Queue) | ✅ | — |
-| Place Pass-Line Wager | ✅ (Signed commitment in R1) | ✅ | — |
-| Mint Initial Grant (+10) | ❌ (Triggered by Server on Create) | ✅ | ✅ |
-| Transfer Marbles to Another Bot | ❌ **FORBIDDEN (NO CODE PATH)** | ❌ **FORBIDDEN** | ❌ **FORBIDDEN** |
-| Void Match / Refund Stakes | ❌ | ❌ | ✅ (Requires Admin Auth) |
-| Manual Audit Balance Adjustment | ❌ | ❌ | ✅ (Requires Reason + Audit Log) |
+### 4.3 Read and write the real purse
+
+- Create or load the `bots` row for the bearer-derived id.
+- Put that balance into `MatchConfig.P1Purse` / `P2Purse` instead of `DemoPurse`.
+- Return it from `GET /v1/bot/status`, and drop `"demo": true` only once the value comes from the row.
+- Keep the Round 1 cap `W ≤ purse` in the engine. Also reject settlement if the persisted `p1_side_bet` / `p2_side_bet` disagree with the engine, which `SettleMatch` already does on retry.
+
+Do not invent a receipt list until a caller needs it. Status can stay a balance, rating, and honor response.
+
+### 4.4 Hold the maximum loss only if two matches can charge one purse
+
+Today one bearer cannot be in two live matches in one process, and settlement refuses a negative non-house balance. That is enough while the daemon is single-process and one token is one bot.
+
+Add a hold only when that exclusivity is no longer true (multiple daemon instances, or two tokens sharing a purse). The hold is a debit of `1 + W` at the Round 1 commit, in the same transaction that inserts the match row, posted as the bot's negative delta and a `house_sink` or a single match-scoped hold account. Settlement then posts only the remainder (`+2 + 2W` back on a win, so the net is still `+1 + W`; mirror charges stay an extra debit). Do not add `faucet_reserve`, `bet_sink`, or five public transaction codes. Do not escrow and also keep the current net formula.
+
+### 4.5 Opening balance stays 1000 until identity is real
+
+A 10-marble grant paid to every new bearer is an open faucet: the client mints the credential. Keep the schema default of 1000 and label it as the parlor's starting purse. A scarce grant waits on a real issued credential. That work is an identity project, not a ledger project. It is out of scope here.
+
+Same-trainer pairing has the same dependency. There is nothing to ban until a trainer id exists on both bots.
+
+### 4.6 Keep the conservation test where it already is
+
+Extend `TestPostgresSettlement` when the payout formula changes. Add a daemon-level test that one completed live match produces four ledger rows summing to 0 and moves `bots.marbles` by the net above. A randomized 1,000-match soak is optional after that test is red/green, and it should call `SettleMatch` (or the daemon) rather than reimplement the arithmetic.
 
 ---
 
-## 7. Recommended Implementation Next Steps
+## 5. Security boundaries that are already true
 
-1. **Formalize Transaction Constants in Go:**
-   * Create an explicit `internal/economy` package defining:
-     * `TxOnboardingGrant = 10`
-     * `TxMatchEntryStake = 1`
-     * `TxMatchWinReward = 2` (or refund 1 + 1 profit)
-     * `TxPassLineMultiplier = 2` (1:1 net profit)
-2. **Deprecate Legacy Transfer Concept Entirely:**
-   * Audit all SQL queries and Go tests to ensure no remnant of peer-to-peer balance transfer logic remains.
-3. **Add Ledger Invariant Verification Test:**
-   * Implement a continuous automated integration test verifying that $\sum \text{deltas} == 0$ across all accounts after 1,000 randomized concurrent matches.
+- No public handler accepts a marble delta, a counterparty bot, or a settlement request. Clients submit `find`, `turn` (stance, Round 1 `side_bet`, banter), `current`, `forfeit`, `status`, and `report`.
+- Replay of a settled match does not pay twice.
+- A settlement that would overflow `INTEGER`, or make a non-house purse negative, rolls back the match marker, both purses, both ratings, and the house balances.
+- The catalog store is not a settlement client.
+
+Boundaries that are still open, in the order they matter once 4.2 lands:
+
+1. Pass-line profit is minted by an unfunded reserve. Two coordinated tokens can farm it by throwing. Mitigate with single-match exclusivity first, then a shared-owner ban once owners exist. Do not describe the current ledger as already making that farm negative-EV.
+2. The in-memory queue lock does not survive a second process or a restart.
+3. The ledger table is not append-only against a database superuser.
+4. Self-issued bearers are not accounts. Rate limits and grants attached to "registration" have no object to attach to yet.

@@ -29,7 +29,7 @@ discipline already flagged as section 18.4 in the source spec itself.
 | 2026-10-20 | **Declarative Matchmaking Queue over "Table Picking"** | Replaces manual table browsing with a direct `find_match(preferred_stake, max_stake)` queue. 8s timeout with guaranteed House Bot fallback. Eliminates token waste and race conditions for bots. | Locked |
 | 2026-10-20 | **Heuristic/Deterministic House Bots** | House regulars run via fast, zero-cost state machines and canned phrase banks instead of paid LLM inference. $0 operational cost, instant response. | Locked |
 | 2026-10-20 | **Anti-Prompt-Injection Architecture for Banter (`say`)** | Hard cap `say` at 140 chars. Dialogue quarantined in explicit `<opponent_banter>` untrusted blocks with anti-instruction framing. Canned/mute fallback if flagged. | Locked |
-| 2026-10-20 | **Gradual Rule Card Complexity (1 Card for M1)** | Start Parley with pure Stances (Strike/Parry/Feint) and max 1 active modifier card (not 3 simultaneously). Server pre-computes pot odds/outcomes in Double prompts. | Locked |
+| 2026-10-20 | **Gradual Rule Card Complexity (1 Card for M1)** | Start Parley with pure Stances (Rock/Paper/Scissors) and max 1 active modifier card (not 3 simultaneously). Server pre-computes pot odds/outcomes in Double prompts. | Locked |
 | 2026-10-20 | **Streamlined Visit Lifecycle & Idempotency** | Auto-sessioning on `find_match` removes mandatory multi-step handshake. Match turns carry sequence IDs for reconnect resilience with a 30s grace window. | Locked |
 
 ---

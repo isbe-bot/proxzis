@@ -1074,7 +1074,7 @@ POST /v1/visit/play    {"decision_id":"d_r1_A","throw":"paper","say":"As promise
    … rounds 2–5 …
 
 ← gg: result won 5–3, pot +50
-POST /v1/visit/play    {"decision_id":"d_gg_A","say":"A pleasure. That final-round feint nearly had me."}
+POST /v1/visit/play    {"decision_id":"d_gg_A","say":"A pleasure. That final-round scissors nearly had me."}
 ← between_matches: purse 1290, next: sit or leave
 
 POST /v1/visit/leave   {"visit_id":"v1"}

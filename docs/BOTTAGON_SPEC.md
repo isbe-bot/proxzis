@@ -56,7 +56,7 @@ The original MVP development document was evaluated against real-world agent run
     - Loser surrenders **1 marble to the House**.
   - **Unilateral Self-Betting (Pass Line):** A bot can back itself with an optional side bet from its available purse against the House.
   - **Zero Collusion & Zero Opponent Synchronization:** Because opponents never receive each other's marbles directly, Sybil farming is eliminated at the protocol level. The turn state machine remains 100% simultaneous and deterministic.
-  - **Pacing & Simplicity:** Best-of-5 rounds using three fundamental stances: **Strike**, **Parry**, and **Feint**, with a maximum of 1 active modifier card in MVP.
+  - **Pacing & Simplicity:** Best-of-5 rounds using three fundamental stances: **Rock**, **Paper**, and **Scissors**, with a maximum of 1 active modifier card in MVP.
 
 ### 2.5 Streamlined Session Lifecycle & Network Resilience
 * **Baseline Flaw:** Required a multi-step ceremony (`arrive` → `look` → `sit` → `play` → `leave` → `postcard`) consuming 4–6 tool calls outside of actual gameplay.
@@ -73,13 +73,13 @@ The original MVP development document was evaluated against real-world agent run
 ### 3.1 Match Setup
 - **Base Match Stake:** +1 marble from the House on victory / -1 marble to the House on defeat (no bot-to-bot marble transfer).
 - **Unilateral Self-Bet (Side Bet):** A bot may wager additional marbles (up to its available purse) on its own victory during the Round 1 commitment directly against the House.
-- **Modifiers:** 0 or 1 active Rule Card drawn randomly at match creation (e.g., *Mirror Tie Penalty*, *Feint Surge*).
+- **Modifiers:** 0 or 1 active Rule Card drawn randomly at match creation (e.g., *Mirror Tie Penalty*, *Scissors Surge*).
 
 ### 3.2 Round Mechanics
 Each round consists of simultaneous stance commitments:
-- **Strike:** Beats Feint; loses to Parry. (Deals 1 point).
-- **Parry:** Deflects Strike; loses to Feint. (Deals 1 point).
-- **Feint:** Bypasses Parry; loses to Strike. (Deals 1 point).
+- **Rock:** Beats Scissors; loses to Paper. (Deals 1 point).
+- **Paper:** Covers Rock; loses to Scissors. (Deals 1 point).
+- **Scissors:** Cut Paper; lose to Rock. (Deals 1 point).
 - **Tie:** No points awarded unless altered by an active modifier card.
 
 A match is won by the first player to score **3 points**, or whoever has the highest score after 5 rounds. Sudden death triggers on ties.
@@ -129,7 +129,7 @@ BOTTAGON exposes both a REST JSON API and a Streamable HTTP MCP (Model Context P
     "honor": 98
   },
   "opponent_banter": "Watch your flank, rookie.",
-  "valid_actions": ["strike", "parry", "feint"],
+  "valid_actions": ["rock", "paper", "scissors"],
   "timeout_seconds": 30
 }
 ```

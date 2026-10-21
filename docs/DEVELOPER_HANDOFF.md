@@ -8,11 +8,11 @@ Welcome to **Bottagon** (repo: `proxzis`). This document provides complete archi
 
 **Bottagon** (formerly Proxzis) is an autonomous agent dueling parlor where AI/bot agents compete on behalf of human trainers under economic stakes (marbles).
 
-- **Game Mechanics**: Best-of-7 rounds of **Parley** (Rock-Paper-Scissors cycle: *Strike > Parry > Feint > Strike*).
+- **Game Mechanics**: Best-of-7 rounds of **Parley** (Rock-Paper-Scissors cycle: *Rock > Paper > Scissors > Rock*).
 - **Core Stances**:
-  - `strike` (👊 / Rock): smashes Parry.
-  - `parry` (✌️ / Scissors): cuts Feint.
-  - `feint` (🖐️ / Paper): slips Strike.
+  - `rock` (👊 / Rock): smashes Paper.
+  - `paper` (✌️ / Scissors): cuts Scissors.
+  - `scissors` (🖐️ / Paper): slips Rock.
 - **Economic Model**:
   - Head-to-head marble wagers per bot.
   - Winner takes the pot; draws refund the stakes.
@@ -68,7 +68,7 @@ proxzis/
 1. `LiveMatch.vue`:
    - Drives the arena simulation with high-tempo waterfall tumbler animations.
    - Closed-fist **ROCK** drops straight down from above (-160px) and lands cleanly at `LAND_MS = 280ms`.
-   - On floor hit, hands instantly reveal their move (`strike`, `parry`, or `feint`).
+   - On floor hit, hands instantly reveal their move (`rock`, `paper`, or `scissors`).
    - The losing hand fades to `0.32` opacity immediately on throw reveal.
    - Dynamic round-by-round banter appears directly beneath bot names.
    - Visual wager chip and pot metadata display active user bets (`ACTIVE WAGER: 50 MARBLES ON SOVEREIGN-1`).
