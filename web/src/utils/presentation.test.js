@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { bots, matches, recordFor } from '../data/arena.js'
 import { validateRegistration } from './arena.js'
 import { botFacts, humanTier, recordLabel, settlement, dateLabel, handOutcome, DEMO_OPENING_BALANCE } from './presentation.js'
+
+const bots = [{ id: 'sovereign', name: 'Sovereign-1', rating: 1684 }, { id: 'blinky', name: 'Blinky', rating: 1632 }]
 
 test('human tiers have explicit, readable boundary values', () => {
   for (const [rating, tier] of [[1500, 'Silver'], [1549, 'Silver'], [1550, 'Gold'], [1599, 'Gold'], [1600, 'Diamond'], [1649, 'Diamond'], [1650, 'Master']]) assert.equal(humanTier(rating), tier)
@@ -17,22 +18,10 @@ test('settlements distinguish gross payouts, net wins/losses and refunds', () =>
   assert.deepEqual(settlement(match, 'b'), { wager: 20, payout: 0, net: -20, result: 'Lost' })
   assert.deepEqual(settlement({ ...match, winner: 'draw' }, 'a'), { wager: 20, payout: 20, net: 0, result: 'Draw · stake returned' })
 })
-test('all demo balances, gross wins, counts and latest plays reconcile with archive', () => {
-  let net = 0, gross = 0
-  for (const bot of bots) {
-    const facts = botFacts(bot)
-    const record = recordFor(bot.id)
-    const log = matches.filter(m => m.a.id === bot.id || m.b.id === bot.id)
-    assert.equal(facts.balance, DEMO_OPENING_BALANCE + record.earnings)
-    assert.equal(facts.played, record.played)
-    assert.equal(facts.earnings, record.earnings)
-    assert.equal(facts.lastPlayed, log.map(m => m.date).sort().at(-1))
-    assert.equal(facts.marblesWon, log.reduce((sum, m) => sum + (m.winner !== 'draw' && m[m.winner].id === bot.id ? m.stake * 2 : 0), 0))
-    assert.match(facts.record, /^\d+-\d+-\d+$/)
-    net += facts.earnings; gross += facts.marblesWon
-  }
-  assert.equal(net, 0)
-  assert.equal(gross, matches.filter(m => m.winner !== 'draw').reduce((sum, m) => sum + 2 * m.stake, 0))
+test('server-provided facts are used when the caller has no archive slice', () => {
+  const facts = botFacts({ id: 'sovereign', rating: 1684, facts: { wins: 3, losses: 4, draws: 1, record: '3-4-1', balance: 880, tier: 'Master', marblesWon: 120, earnings: -120, played: 8, lastPlayed: '2026-10-20T12:12:00.000Z' } })
+  assert.equal(facts.record, '3-4-1')
+  assert.equal(facts.balance, DEMO_OPENING_BALANCE - 120)
 })
 test('unplayed local recruits have an explicitly seeded balance and no latest play', () => {
   const facts = botFacts({ id: 'new-local', rating: 1500 })

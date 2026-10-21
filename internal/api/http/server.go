@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/isbe-bot/bottagon/internal/catalog"
 	"github.com/isbe-bot/bottagon/internal/conduct"
 	"github.com/isbe-bot/bottagon/internal/game/parley"
 	"github.com/isbe-bot/bottagon/internal/matchmaker"
@@ -20,8 +21,21 @@ import (
 
 // Server handles the HTTP REST API for BOTTAGON contestants.
 type Server struct {
-	queue     *matchmaker.Queue
-	moderator *conduct.Moderator
+	queue        *matchmaker.Queue
+	moderator    *conduct.Moderator
+	queueTimeout time.Duration
+	catalog      catalog.Store
+}
+
+// SetCatalog attaches the spectator archive. Call it before Routes.
+func (s *Server) SetCatalog(store catalog.Store) {
+	s.catalog = store
+}
+
+// SetQueueTimeout bounds matchmaking long-polls. Zero keeps the production
+// wait. The queue clamps values outside (0, MaxQueueWaitTime].
+func (s *Server) SetQueueTimeout(d time.Duration) {
+	s.queueTimeout = d
 }
 
 // NewServer creates a new Server instance.
@@ -45,6 +59,9 @@ func (s *Server) Routes() chi.Router {
 	r.Get("/bot/status", s.handleGetBotStatus)
 	r.Post("/report", s.handleReport)
 	r.Get("/rules", s.handleGetRules)
+	if s.catalog != nil {
+		mountCatalog(r, s.catalog)
+	}
 
 	return r
 }
@@ -253,7 +270,11 @@ func (s *Server) findMatch(ctx context.Context, bot matchmaker.BotInfo, req Find
 	if req.PreferredStake < 0 || req.MaxStake < 0 || req.MaxStake > 0 && req.PreferredStake > req.MaxStake {
 		return nil, actionError{http.StatusBadRequest, "invalid stake range"}
 	}
-	session, err := s.queue.FindMatch(ctx, bot, req.PreferredStake, req.MaxStake, matchmaker.MaxQueueWaitTime)
+	timeout := s.queueTimeout
+	if timeout <= 0 {
+		timeout = matchmaker.MaxQueueWaitTime
+	}
+	session, err := s.queue.FindMatch(ctx, bot, req.PreferredStake, req.MaxStake, timeout)
 	if err != nil {
 		return nil, actionError{http.StatusRequestTimeout, "matchmaking unavailable"}
 	}

@@ -5,7 +5,7 @@ import { createSSRApp } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { fileURLToPath } from 'node:url'
 import { readFile, readdir } from 'node:fs/promises'
-import { bots, matches } from '../data/arena.js'
+import { bots, matches } from './fixtures.js'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 
@@ -93,7 +93,8 @@ test('Vue components render real badges, fixed rows, facts and replay settlement
       assert.match(source, /<GameList v-if="profileLog.length"/)
       assert.match(source, /<GameList v-if="filteredMatches.length"/)
       assert.match(source, /<MatchReplay :match="detail"/)
-      assert.equal((source.match(/validateRegistration\(name.value, email.value, persona.value, allBots.value\)/g) || []).length, 2)
+      assert.match(source, /from '\.\/api\/catalog\.js'/)
+      assert.equal((source.match(/validateRegistration\(/g) || []).length, 0)
     })
     await t.test('shared hand glyphs render clean without transforms, conceal moves, and fade loser', async () => {
       const source = await readFile(`${root}src/components/HandGlyph.vue`, 'utf8')
@@ -111,7 +112,7 @@ test('Vue components render real badges, fixed rows, facts and replay settlement
       assert.match(concealed, /closed fist, stance concealed/)
       assert.match(concealed, /✊/)
       assert.doesNotMatch(concealed, /✌️|hand-win|round won/)
-      const live = await render('LiveMatch', {})
+      const live = await render('LiveMatch', { left: bots[0], right: bots[1], rounds: [{ a: 'strike', b: 'parry', quoteA: 'a', quoteB: 'b' }], stake: 50 })
       assert.equal((live.match(/stance concealed/g) || []).length, 2)
       assert.doesNotMatch(live, /hand-win|hand-lose|hand-draw/)
       const liveSource = await readFile(`${root}src/components/LiveMatch.vue`, 'utf8')

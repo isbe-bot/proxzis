@@ -17,6 +17,7 @@ import (
 func TestDoctor_RunAllScenariosAgainstLiveRouter(t *testing.T) {
 	q := matchmaker.NewQueue()
 	server := httpapi.NewServer(q)
+	server.SetQueueTimeout(250 * time.Millisecond)
 
 	r := chi.NewRouter()
 

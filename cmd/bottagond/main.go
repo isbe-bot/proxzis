@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,9 +16,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/isbe-bot/bottagon/internal/api/http"
+	"github.com/isbe-bot/bottagon/internal/catalog"
 	"github.com/isbe-bot/bottagon/internal/config"
 	"github.com/isbe-bot/bottagon/internal/matchmaker"
 	"github.com/isbe-bot/bottagon/internal/obs"
@@ -41,39 +44,7 @@ func main() {
 		slog.String("version", Version),
 	)
 
-	r := chi.NewRouter()
-
-	r.Use(middleware.RequestID)
-	r.Use(middleware.Recoverer)
-	r.Use(obs.MetricsMiddleware)
-
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(HealthResponse{
-			Status:    "ok",
-			Timestamp: time.Now().UTC(),
-			Version:   Version,
-		})
-	})
-
-	r.Handle("/metrics", promhttp.Handler())
-
-	// Agent discoverability
-	r.Get("/llms.txt", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(httpapi.LLMsTxtContent))
-	})
-
-	// Initialize in-memory matchmaking queue and REST API server
-	queue := matchmaker.NewQueue()
-	apiServer := httpapi.NewServer(queue)
-	r.Mount("/v1", apiServer.Routes())
-
-	// Streamable HTTP MCP Adapter endpoint
-	mcpAdapter := httpapi.NewMCPAdapter(apiServer)
-	r.Mount("/mcp", mcpAdapter.Handler())
+	r, _ := newRouter(0, openCatalog(cfg.DatabaseURL, logger))
 
 	serverCtx, stopServer := context.WithCancel(context.Background())
 	defer stopServer()
@@ -108,6 +79,70 @@ func main() {
 		}
 		logger.Info("bottagond terminated cleanly")
 	}
+}
+
+// newRouter is the daemon surface: health, metrics, discovery, REST, and MCP.
+// queueTimeout of zero uses the production matchmaking wait.
+func openCatalog(databaseURL string, logger *slog.Logger) catalog.Store {
+	if databaseURL == "" {
+		logger.Info("spectator archive disabled", slog.String("reason", "DATABASE_URL is unset"))
+		return nil
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		logger.Error("spectator archive disabled", slog.Any("error", err))
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		logger.Error("spectator archive disabled", slog.Any("error", err))
+		_ = db.Close()
+		return nil
+	}
+	store := catalog.OpenPostgres(db)
+	if err := store.SeedIfEmpty(ctx); err != nil {
+		logger.Error("spectator seed failed", slog.Any("error", err))
+		_ = db.Close()
+		return nil
+	}
+	logger.Info("spectator archive ready")
+	return store
+}
+
+func newRouter(queueTimeout time.Duration, archive catalog.Store) (http.Handler, *httpapi.Server) {
+	r := chi.NewRouter()
+
+	r.Use(middleware.RequestID)
+	r.Use(middleware.Recoverer)
+	r.Use(obs.MetricsMiddleware)
+
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(HealthResponse{
+			Status:    "ok",
+			Timestamp: time.Now().UTC(),
+			Version:   Version,
+		})
+	})
+
+	r.Handle("/metrics", promhttp.Handler())
+
+	r.Get("/llms.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(httpapi.LLMsTxtContent))
+	})
+
+	apiServer := httpapi.NewServer(matchmaker.NewQueue())
+	if queueTimeout > 0 {
+		apiServer.SetQueueTimeout(queueTimeout)
+	}
+	apiServer.SetCatalog(archive)
+	r.Mount("/v1", apiServer.Routes())
+	r.Mount("/mcp", httpapi.NewMCPAdapter(apiServer).Handler())
+	return r, apiServer
 }
 
 func newHTTPServer(cfg *config.Config, handler http.Handler, baseCtx context.Context) *http.Server {

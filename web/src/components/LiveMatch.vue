@@ -3,22 +3,22 @@ import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { Pause, Play } from 'lucide-vue-next'
 import HandGlyph from './HandGlyph.vue'
 import { handOutcome } from '../utils/presentation.js'
-import { bots, liveRounds } from '../data/arena.js'
 import { resolveClash, summarizeRounds } from '../utils/arena.js'
 import { createLiveClock, liveTimeline } from '../utils/liveClock.js'
 
+const props = defineProps({
+  left: { type: Object, default: null },
+  right: { type: Object, default: null },
+  rounds: { type: Array, default: () => [] },
+  stake: { type: Number, default: 0 },
+})
 const emit = defineEmits(['profile'])
-const left = bots[0], right = bots[1]
+const left = computed(() => props.left)
+const right = computed(() => props.right)
+const liveRounds = computed(() => props.rounds || [])
 const elapsed = ref(0), paused = ref(false)
 const clock = createLiveClock()
-
-// Wager state: User has placed a wager on Sovereign-1 to win the match
-const userWager = ref({
-  amount: 50,
-  pick: left.id,
-  targetName: left.name,
-  pot: 100,
-})
+const userWager = computed(() => left.value && props.stake > 0 ? { amount: props.stake, targetName: left.value.name, pot: props.stake * 2 } : null)
 
 // Snappy round cadence: trimmed ending so results don't linger
 // 2200ms per round keeps the action moving briskly
@@ -26,19 +26,20 @@ const ROUND_DURATION_MS = 2200
 const FINAL_HOLD_DURATION_MS = 2400
 const LAND_MS = 280
 
-const totalDuration = computed(() => liveRounds.length * ROUND_DURATION_MS)
+const totalDuration = computed(() => liveRounds.value.length * ROUND_DURATION_MS)
 const cycleDuration = computed(() => totalDuration.value + FINAL_HOLD_DURATION_MS)
 
 const roundInfo = computed(() => {
+  if (!liveRounds.value.length) return { roundIndex: 0, roundElapsed: 0, isMatchComplete: false, isAirborne: true, resolved: 0 }
   const time = Math.max(0, elapsed.value)
   const local = time % cycleDuration.value
   const isMatchComplete = local >= totalDuration.value
   const rIndex = isMatchComplete
-    ? liveRounds.length - 1
-    : Math.min(Math.floor(local / ROUND_DURATION_MS), liveRounds.length - 1)
+    ? liveRounds.value.length - 1
+    : Math.min(Math.floor(local / ROUND_DURATION_MS), liveRounds.value.length - 1)
   const rElapsed = isMatchComplete ? ROUND_DURATION_MS : local % ROUND_DURATION_MS
   const isAirborne = !isMatchComplete && rElapsed < LAND_MS
-  const resolvedCount = isMatchComplete ? liveRounds.length : (rElapsed >= LAND_MS ? rIndex + 1 : rIndex)
+  const resolvedCount = isMatchComplete ? liveRounds.value.length : (rElapsed >= LAND_MS ? rIndex + 1 : rIndex)
 
   return {
     roundIndex: rIndex,
@@ -50,14 +51,14 @@ const roundInfo = computed(() => {
 })
 
 // Standard timeline reference
-const timeline = computed(() => liveTimeline(elapsed.value, liveRounds.length))
+const timeline = computed(() => liveTimeline(elapsed.value, liveRounds.value.length || 1))
 const phase = computed(() => timeline.value.phase)
 
 const roundIndex = computed(() => roundInfo.value.roundIndex)
-const round = computed(() => liveRounds[roundIndex.value])
+const round = computed(() => liveRounds.value[roundIndex.value])
 const resolved = computed(() => roundInfo.value.resolved)
-const score = computed(() => summarizeRounds(liveRounds.slice(0, resolved.value)))
-const winner = computed(() => resolveClash(round.value.a, round.value.b))
+const score = computed(() => summarizeRounds(liveRounds.value.slice(0, resolved.value)))
+const winner = computed(() => round.value ? resolveClash(round.value.a, round.value.b) : 'draw')
 const isAirborne = computed(() => roundInfo.value.isAirborne)
 
 // Immediate outcome for throw reveal: active right on floor hit
@@ -83,40 +84,8 @@ const tumblerOffset = computed(() => {
   return 0
 })
 
-// Dynamic per-round banter below user's names
-const banterLinesA = [
-  'Your pattern is becoming a habit.',
-  'Read the defense. Smash the line.',
-  'Every concession is an investment.',
-  'Calculated counter. Checkmate.',
-  'The tell was in your tempo.',
-  'Cold logic never flinches.',
-  'Match point. Closing the book.'
-]
-
-const banterLinesB = [
-  'Oops. Was that your strategy?',
-  'Chaos engine running full throttle!',
-  'Did you really think I’d repeat that?',
-  'Never blink first in this parlor!',
-  'Caught you leaning the wrong way!',
-  'One more roll for science!',
-  'House always has the final word!'
-]
-
-const currentBanterA = computed(() => {
-  if (roundInfo.value.isMatchComplete) {
-    return score.value.a > score.value.b ? 'Flawless execution. Target acquired.' : 'Acceptable variance.'
-  }
-  return banterLinesA[roundIndex.value] || left.quote
-})
-
-const currentBanterB = computed(() => {
-  if (roundInfo.value.isMatchComplete) {
-    return score.value.b > score.value.a ? 'Told you the house never blinks!' : 'Good duel! Rematch anytime.'
-  }
-  return banterLinesB[roundIndex.value] || right.quote
-})
+const currentBanterA = computed(() => round.value?.quoteA || left.value?.quote || '')
+const currentBanterB = computed(() => round.value?.quoteB || right.value?.quote || '')
 
 let frame
 function sample() { elapsed.value = clock.elapsed() }
@@ -178,8 +147,9 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <p v-if="!(left && right && round)" class="mono" role="status">Loading the exhibition.</p>
     <!-- Arena Stage with Waterfall / Tumbler Motion -->
-    <div class="arena-stage" :style="{ '--hand-offset': `${tumblerOffset + (timeline.handOffset * 0)}px` }">
+    <div v-if="left && right && round" class="arena-stage" :style="{ '--hand-offset': `${tumblerOffset + (timeline.handOffset * 0)}px` }">
       <div class="arena-grid" aria-hidden="true"></div>
       <div class="arena-orbit" aria-hidden="true"></div>
 
@@ -205,7 +175,7 @@ onBeforeUnmount(() => {
 
       <!-- Center Score (clean, no ro-sham-bo text) -->
       <div class="arena-score">
-        <span class="eyebrow">{{ roundInfo.isMatchComplete ? 'FINAL SCORE' : `ROUND ${roundIndex + 1} OF 7` }}</span>
+        <span class="eyebrow">{{ roundInfo.isMatchComplete ? 'FINAL SCORE' : `ROUND ${roundIndex + 1} OF ${liveRounds.length}` }}</span>
         <div class="score-digits">
           <span>{{ score.a }}</span><i>-</i><span>{{ score.b }}</span>
         </div>
@@ -234,7 +204,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- Round progression track -->
-    <div class="round-track" aria-label="Simulation round progress">
+    <div v-if="left && right && round" class="round-track" aria-label="Simulation round progress">
       <span
         v-for="(r, i) in liveRounds"
         :key="i"

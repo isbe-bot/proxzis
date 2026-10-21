@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -15,12 +16,13 @@ import (
 func TestHTTPAPI_FullMatchLifecycleAgainstHouse(t *testing.T) {
 	q := matchmaker.NewQueue()
 	server := NewServer(q)
+	server.SetQueueTimeout(100 * time.Millisecond)
 	router := server.Routes()
 
 	botID := uuid.New()
 	authHeader := "Bearer " + botID.String()
 
-	// 1. Find Match (with quick House fallback)
+	// 1. Find Match (house fallback uses the short test wait)
 	findReqBody := `{"preferred_stake": 10, "max_stake": 50}`
 	req, _ := http.NewRequest(http.MethodPost, "/match/find", bytes.NewBufferString(findReqBody))
 	req.Header.Set("Authorization", authHeader)
@@ -118,6 +120,7 @@ func TestHTTPAPI_FullMatchLifecycleAgainstHouse(t *testing.T) {
 func TestHTTPAPI_Forfeit(t *testing.T) {
 	q := matchmaker.NewQueue()
 	server := NewServer(q)
+	server.SetQueueTimeout(100 * time.Millisecond)
 	router := server.Routes()
 
 	botID := uuid.New()

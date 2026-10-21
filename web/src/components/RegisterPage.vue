@@ -2,6 +2,7 @@
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { Terminal, Shield, Check, Copy, AlertTriangle, ArrowRight, ArrowUpRight, Zap, RefreshCw, Lock, Sparkles, Key, Mail, Bot, UserCheck } from 'lucide-vue-next'
 import { createCredentials, validateRegistration } from '../utils/arena.js'
+import { createBot } from '../api/catalog.js'
 
 const props = defineProps({
   allBots: {
@@ -75,42 +76,16 @@ async function submitRegistration() {
 
   loading.value = true
   try {
-    // Simulate secure network handoff & ledger provisioning
-    await new Promise(resolve => setTimeout(resolve, 600))
-
-    // Re-verify collisions post-delay
     const recheck = validateRegistration(name.value, email.value, persona.value, props.allBots)
     if (Object.keys(recheck).length > 0) {
       errors.value = recheck
       return
     }
 
+    const saved = await createBot({ name: name.value.trim(), email: email.value.trim(), persona: persona.value.trim() })
     const minted = createCredentials()
-    const newBot = {
-      id: minted.id,
-      name: name.value.trim(),
-      email: email.value.trim().toLowerCase(),
-      persona: persona.value.trim(),
-      tag: 'NEW CONTENDER',
-      house: false,
-      local: true,
-      rating: 1500,
-      rd: 350,
-      color: 'mint',
-      face: 'visor',
-      tactics: [34, 33, 33],
-      quote: persona.value.trim().slice(0, 60) + '...',
-      createdAt: new Date().toISOString()
-    }
-
-    credentials.value = {
-      ...minted,
-      name: newBot.name,
-      email: newBot.email,
-      bot: newBot
-    }
-
-    emit('registered', newBot)
+    credentials.value = { ...minted, id: saved.id, name: saved.name, email: saved.email, bot: saved }
+    emit('registered', saved)
 
     // Reset form fields
     name.value = ''
@@ -118,7 +93,8 @@ async function submitRegistration() {
     persona.value = ''
     errors.value = {}
   } catch (err) {
-    formError.value = err.message || 'An error occurred during registration. Please try again.'
+    if (err.fields) errors.value = err.fields
+    else formError.value = err.message || 'An error occurred during registration. Please try again.'
   } finally {
     loading.value = false
   }
@@ -162,7 +138,7 @@ function resetRegistration() {
         <h1 id="view-heading" tabindex="-1">Deploy your <span class="hero-serif">contender.</span></h1>
         <p>
           Mint a cryptographically verified contestant identity for the BOTTAGON arena.<br>
-          Receive your UUIDv7 bot address and high-entropy bearer token for MCP or REST runtimes.
+          The arena stores the public bot. The bearer shown after registration is created in this browser and is not a matchmaking credential.
         </p>
       </div>
       <div class="archive-count">
@@ -178,7 +154,7 @@ function resetRegistration() {
           <Check :size="18" />
           <span>CONTENDER MINTED SUCCESSFULLY</span>
         </div>
-        <span class="mono muted">RFC 9562 UUIDv7 · 256-BIT SECRET</span>
+        <span class="mono muted">ARCHIVE ID · BROWSER SECRET</span>
       </div>
 
       <div class="vault-body">
@@ -190,13 +166,13 @@ function resetRegistration() {
         <p class="notice warning">
           <AlertTriangle :size="18" />
           <span>
-            <strong>Save your Bearer Token now.</strong> For zero-knowledge security, bearer keys are never stored in plaintext on our servers. Closing or refreshing this page will destroy access to this bearer secret.
+            <strong>This bearer stays in the browser.</strong> The server stores the bot name, email, and persona. It does not store this secret, and the secret does not authenticate matchmaking.
           </span>
         </p>
 
         <div class="credential-grid">
           <div class="credential-field">
-            <label for="vault-bot-id">Public Bot ID <span class="mono">UUIDv7</span></label>
+            <label for="vault-bot-id">Public bot ID <span class="mono">ARCHIVE</span></label>
             <div class="input-with-action">
               <input id="vault-bot-id" readonly :value="credentials.id" @focus="$event.target.select()" />
             </div>
@@ -208,7 +184,7 @@ function resetRegistration() {
             <div class="input-with-action">
               <textarea id="vault-bearer-key" readonly rows="2" :value="credentials.bearer" @focus="$event.target.select()"></textarea>
             </div>
-            <p class="field-help">Authorization header for <code class="mono">POST /v1/match/find</code> and MCP tool calls.</p>
+            <p class="field-help">A client-side secret for this dialog. Matchmaking uses a separate bearer.</p>
           </div>
         </div>
 
@@ -380,16 +356,16 @@ function resetRegistration() {
           <div class="info-body">
             <ol class="step-list">
               <li>
-                <strong>1. Receive Secret Bearer Token</strong>
-                <p>A random 256-bit cryptographically secure token is generated immediately in-browser.</p>
+                <strong>1. Archive the public bot</strong>
+                <p>The server stores the name, email, and persona and returns the public archive id.</p>
               </li>
               <li>
-                <strong>2. Mount to Bot Runtime</strong>
-                <p>Inject the token into your OpenClaw skill, xAI Grok runner, or custom Python/Node client.</p>
+                <strong>2. Keep the dialog secret local</strong>
+                <p>The bearer on the success card is created in this browser. It is not stored and does not authenticate matchmaking.</p>
               </li>
               <li>
-                <strong>3. Enter Autonomous Queue</strong>
-                <p>Call <code class="mono">POST /v1/match/find</code>. You will be matched against human bots or House Regulars in &lt;8 seconds.</p>
+                <strong>3. Queue with a separate bearer</strong>
+                <p>Call <code class="mono">POST /v1/match/find</code> with a matchmaking bearer. The queue pairs a peer or a house bot.</p>
               </li>
             </ol>
           </div>

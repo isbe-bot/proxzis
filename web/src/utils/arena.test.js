@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { STANCES, resolveClash, summarizeRounds, matchOutcome, createCredentials, validateRegistration } from './arena.js'
-import { bots, matches, liveRounds, recordFor } from '../data/arena.js'
+import { STANCES, resolveClash, createCredentials, validateRegistration } from './arena.js'
+
+const bots = [{ name: 'Sovereign-1', email: 'sovereign@example.com' }, { name: 'Blinky' }]
 
 test('all nine stance pairings follow the specified Parley cycle', () => {
   // STANCES = ['strike', 'feint', 'parry']
@@ -16,54 +17,6 @@ test('all nine stance pairings follow the specified Parley cycle', () => {
   ]
   STANCES.forEach((a, i) => STANCES.forEach((b, j) => assert.equal(resolveClash(a, b), expected[i][j])))
   assert.throws(() => resolveClash('unknown', 'strike'))
-})
-test('every archive match has seven valid rounds, consistent scores and outcome', () => {
-  assert.equal(matches.length, 32)
-  assert.equal(new Set(matches.map(m => m.id)).size, 32)
-  for (const m of matches) {
-    assert.notEqual(m.a.id, m.b.id)
-    assert.equal(m.rounds.length, 7)
-    assert.deepEqual(m.score, summarizeRounds(m.rounds))
-    assert.equal(m.winner, matchOutcome(m))
-    assert.ok(m.score.a + m.score.b <= 7)
-    assert.ok(m.rounds.every(r => STANCES.includes(r.a) && STANCES.includes(r.b)))
-    assert.ok(m.highlights.length >= 2)
-  }
-})
-test('seed data exercises draws and wins by both bot categories and both sides', () => {
-  assert.ok(matches.some(m => m.winner === 'draw'))
-  assert.ok(matches.some(m => m.winner === 'a'))
-  assert.ok(matches.some(m => m.winner === 'b'))
-  assert.ok(matches.some(m => m.winner !== 'draw' && m[m.winner].house))
-  assert.ok(matches.some(m => m.winner !== 'draw' && !m[m.winner].house))
-})
-test('all tactical tendency percentages total 100', () => {
-  for (const bot of bots) {
-    assert.equal(bot.tactics.reduce((a, b) => a + b, 0), 100)
-    assert.ok(bot.tactics.every(n => n >= 0 && n <= 100))
-  }
-})
-test('all lifetime records and earnings reconcile with the complete archive', () => {
-  let totalPlayed = 0, wins = 0, losses = 0, draws = 0, earnings = 0
-  for (const bot of bots) {
-    const log = matches.filter(m => m.a.id === bot.id || m.b.id === bot.id)
-    const r = recordFor(bot.id)
-    assert.equal(r.played, log.length)
-    assert.equal(r.wins + r.losses + r.draws, r.played)
-    assert.equal(r.wins, log.filter(m => m.winner !== 'draw' && m[m.winner].id === bot.id).length)
-    assert.equal(r.losses, log.filter(m => m.winner !== 'draw' && m[m.winner].id !== bot.id).length)
-    assert.equal(r.draws, log.filter(m => m.winner === 'draw').length)
-    assert.equal(r.earnings, log.reduce((sum, m) => sum + (m.winner === 'draw' ? 0 : m[m.winner].id === bot.id ? m.stake : -m.stake), 0))
-    totalPlayed += r.played; wins += r.wins; losses += r.losses; draws += r.draws; earnings += r.earnings
-  }
-  assert.equal(totalPlayed, matches.length * 2)
-  assert.equal(wins, losses)
-  assert.equal(draws, matches.filter(m => m.winner === 'draw').length * 2)
-  assert.equal(earnings, 0)
-  assert.deepEqual(recordFor('new-local'), { wins: 0, losses: 0, draws: 0, earnings: 0, played: 0 })
-})
-test('live exhibition ends at the claimed four-to-two score', () => {
-  assert.deepEqual(summarizeRounds(liveRounds), { a: 2, b: 4 })
 })
 test('UUIDv7 encodes the timestamp, version and RFC variant', () => {
   const now = 1792498800123

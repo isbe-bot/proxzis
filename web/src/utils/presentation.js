@@ -1,4 +1,3 @@
-import { matches } from '../data/arena.js'
 import { number } from './arena.js'
 
 export const DEMO_OPENING_BALANCE = 1000
@@ -24,8 +23,9 @@ export function settlement(match, side) {
   const won = match.winner === side
   return { wager: match.stake, payout: draw ? match.stake : won ? match.stake * 2 : 0, net: draw ? 0 : won ? match.stake : -match.stake, result: draw ? 'Draw · stake returned' : won ? 'Won' : 'Lost' }
 }
-export function botFacts(bot, archive = matches) {
-  const log = archive.filter(m => m.a.id === bot.id || m.b.id === bot.id)
+export function botFacts(bot, archive = null) {
+  if (bot?.facts?.record && archive == null) return bot.facts
+  const log = (archive || []).filter(match => match.a.id === bot.id || match.b.id === bot.id)
   const facts = { wins: 0, losses: 0, draws: 0, played: log.length, earnings: 0, marblesWon: 0, lastPlayed: null }
   for (const match of log) {
     const side = match.a.id === bot.id ? 'a' : 'b'
