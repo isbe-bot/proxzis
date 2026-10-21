@@ -6,14 +6,11 @@ const bots = [{ name: 'Sovereign-1', email: 'sovereign@example.com' }, { name: '
 
 test('all nine stance pairings follow the specified Parley cycle', () => {
   // STANCES = ['strike', 'feint', 'parry']
-  // strike beats parry (b), feint beats strike (b for feint vs strike, so strike vs feint is 'b')
-  // strike vs strike = draw, strike vs feint = b, strike vs parry = a
-  // feint vs strike = a, feint vs feint = draw, feint vs parry = b
-  // parry vs strike = b, parry vs feint = a, parry vs parry = draw
+  // Engine matrix: strike beats feint, feint beats parry, parry beats strike.
   const expected = [
-    ['draw', 'b', 'a'],
-    ['a', 'draw', 'b'],
-    ['b', 'a', 'draw']
+    ['draw', 'a', 'b'],
+    ['b', 'draw', 'a'],
+    ['a', 'b', 'draw']
   ]
   STANCES.forEach((a, i) => STANCES.forEach((b, j) => assert.equal(resolveClash(a, b), expected[i][j])))
   assert.throws(() => resolveClash('unknown', 'strike'))

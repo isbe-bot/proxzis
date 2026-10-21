@@ -3,6 +3,8 @@ package catalog
 import (
 	"fmt"
 	"time"
+
+	"github.com/isbe-bot/bottagon/internal/game/parley"
 )
 
 // Generate builds the sample archive. The stance cycle and seven-round series
@@ -142,13 +144,13 @@ func outcome(score Score) string {
 	}
 }
 
-// roundWinner is the spectator cycle: strike beats parry, parry beats feint, feint beats strike.
+// roundWinner uses the Parley engine: strike beats feint, feint beats parry, parry beats strike.
 func roundWinner(a, b string) string {
-	if a == b {
+	res, err := parley.ResolveRound(parley.Stance(a), parley.Stance(b), parley.ModifierNone)
+	if err != nil || res.IsTie {
 		return "draw"
 	}
-	beats := map[string]string{"strike": "parry", "parry": "feint", "feint": "strike"}
-	if beats[a] == b {
+	if res.Winner == parley.Player1 {
 		return "a"
 	}
 	return "b"

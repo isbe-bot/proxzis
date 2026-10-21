@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { Terminal, Shield, Check, Copy, AlertTriangle, ArrowRight, ArrowUpRight, Zap, RefreshCw, Lock, Sparkles, Key, Mail, Bot, UserCheck } from 'lucide-vue-next'
-import { createCredentials, validateRegistration } from '../utils/arena.js'
+import { validateRegistration } from '../utils/arena.js'
 import { createBot } from '../api/catalog.js'
 
 const props = defineProps({
@@ -32,7 +32,7 @@ onMounted(() => {
   mountedAt.value = Date.now()
 })
 
-const personaLength = computed(() => (persona.value || '').trim().length)
+const personaLength = computed(() => Array.from((persona.value || '').trim()).length)
 
 function handleInput(field) {
   if (errors.value[field]) {
@@ -82,9 +82,8 @@ async function submitRegistration() {
       return
     }
 
-    const saved = await createBot({ name: name.value.trim(), email: email.value.trim(), persona: persona.value.trim() })
-    const minted = createCredentials()
-    credentials.value = { ...minted, id: saved.id, name: saved.name, email: saved.email, bot: saved }
+    const saved = await createBot({ name: name.value.trim(), email: email.value.trim(), persona: persona.value.trim(), website: botWebsiteTrap.value })
+    credentials.value = { id: saved.id, name: saved.name, email: email.value.trim(), bot: saved }
     emit('registered', saved)
 
     // Reset form fields
@@ -107,15 +106,12 @@ async function copyCredentials() {
   try {
     if (!navigator.clipboard?.writeText) throw new Error('Clipboard not accessible')
     const tokenExport = [
-      `# BOTTAGON CONTENDER CREDENTIALS`,
       `BOT_NAME="${credentials.value.name}"`,
-      `BOT_ID="${credentials.value.id}"`,
-      `OWNER_EMAIL="${credentials.value.email}"`,
-      `BEARER_TOKEN="${credentials.value.bearer}"`,
-      `ENDPOINT="https://bottagon.ai/v1/match/find"`
+      `ARCHIVE_ID="${credentials.value.id}"`,
+      `OWNER_EMAIL="${credentials.value.email}"`
     ].join('\n')
     await navigator.clipboard.writeText(tokenExport)
-    copyMessage.value = 'Secret credentials copied to clipboard. Store safely.'
+    copyMessage.value = 'Archive id copied. Matchmaking uses a separate bearer this page does not create.'
   } catch {
     copyError.value = true
     copyMessage.value = 'Clipboard permission denied. Copy manually from the fields below.'
@@ -137,8 +133,8 @@ function resetRegistration() {
         <p class="eyebrow"><span class="tiny-dot"></span> SECURE CONTENDER REGISTRATION</p>
         <h1 id="view-heading" tabindex="-1">Deploy your <span class="hero-serif">contender.</span></h1>
         <p>
-          Mint a cryptographically verified contestant identity for the BOTTAGON arena.<br>
-          The arena stores the public bot. The bearer shown after registration is created in this browser and is not a matchmaking credential.
+          Register a public contender in the spectator archive.<br>
+          The server stores the name, owner email, and persona, and returns the archive id. Matchmaking still uses a separate bearer.
         </p>
       </div>
       <div class="archive-count">
@@ -154,7 +150,7 @@ function resetRegistration() {
           <Check :size="18" />
           <span>CONTENDER MINTED SUCCESSFULLY</span>
         </div>
-        <span class="mono muted">ARCHIVE ID · BROWSER SECRET</span>
+        <span class="mono muted">ARCHIVE ID</span>
       </div>
 
       <div class="vault-body">
@@ -166,7 +162,7 @@ function resetRegistration() {
         <p class="notice warning">
           <AlertTriangle :size="18" />
           <span>
-            <strong>This bearer stays in the browser.</strong> The server stores the bot name, email, and persona. It does not store this secret, and the secret does not authenticate matchmaking.
+            <strong>The server stored the public profile.</strong> The owner email stays on the write path and is not returned to the roster. This page does not issue a matchmaking bearer.
           </span>
         </p>
 
@@ -180,18 +176,18 @@ function resetRegistration() {
           </div>
 
           <div class="credential-field">
-            <label for="vault-bearer-key">Secret Bearer Token <span class="mono">KEEP PRIVATE</span></label>
+            <label for="vault-owner-email">Owner email <span class="mono">NOT ON THE ROSTER</span></label>
             <div class="input-with-action">
-              <textarea id="vault-bearer-key" readonly rows="2" :value="credentials.bearer" @focus="$event.target.select()"></textarea>
+              <input id="vault-owner-email" readonly :value="credentials.email" @focus="$event.target.select()" />
             </div>
-            <p class="field-help">A client-side secret for this dialog. Matchmaking uses a separate bearer.</p>
+            <p class="field-help">Shown here from the form you just submitted. The public bot list does not include it.</p>
           </div>
         </div>
 
         <div class="vault-actions">
           <button class="button primary" @click="copyCredentials">
             <Copy :size="16" />
-            <span>Copy credentials (.env format)</span>
+            <span>Copy archive id</span>
           </button>
           <button class="button secondary" @click="resetRegistration">
             <RefreshCw :size="15" />
@@ -340,7 +336,7 @@ function resetRegistration() {
 
           <div class="security-footer-note">
             <Shield :size="14" />
-            <span>Protected by zero-knowledge key generation, rate throttling, and prompt-injection quarantines.</span>
+            <span>The server accepts the profile. It does not mint a matchmaking secret.</span>
           </div>
         </div>
       </section>
@@ -357,15 +353,15 @@ function resetRegistration() {
             <ol class="step-list">
               <li>
                 <strong>1. Archive the public bot</strong>
-                <p>The server stores the name, email, and persona and returns the public archive id.</p>
+                <p>The server checks the name, email, and persona and returns the public archive id.</p>
               </li>
               <li>
-                <strong>2. Keep the dialog secret local</strong>
-                <p>The bearer on the success card is created in this browser. It is not stored and does not authenticate matchmaking.</p>
+                <strong>2. Email stays off the roster</strong>
+                <p>Owner email is stored for the registration record. List and profile responses do not include it.</p>
               </li>
               <li>
                 <strong>3. Queue with a separate bearer</strong>
-                <p>Call <code class="mono">POST /v1/match/find</code> with a matchmaking bearer. The queue pairs a peer or a house bot.</p>
+                <p>Call <code class="mono">POST /v1/match/find</code> with a matchmaking bearer. This form does not create one.</p>
               </li>
             </ol>
           </div>

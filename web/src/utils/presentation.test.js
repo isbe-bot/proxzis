@@ -41,11 +41,11 @@ test('latest play is independent of archive ordering and draws do not count as g
   assert.equal(facts.marblesWon, 20)
   assert.equal(facts.earnings, -10)
 })
-test('four-argument registration validates owner email for both forms', () => {
+test('registration validates owner email format and leaves duplicates to the server', () => {
   const args = ['New Bot', 'A valid persona description.', bots]
   assert.deepEqual(validateRegistration(args[0], 'owner@example.com', args[1], args[2]), {})
   for (const email of ['', 'invalid', 'x@']) assert.ok(validateRegistration(args[0], email, args[1], args[2]).email)
-  assert.match(validateRegistration(args[0], ' OWNER@EXAMPLE.COM ', args[1], [{ name: 'Other', email: 'owner@example.com' }]).email, /already/)
+  assert.deepEqual(validateRegistration(args[0], ' OWNER@EXAMPLE.COM ', args[1], [{ name: 'Other', email: 'owner@example.com' }]), {})
 })
 
 test('hand outcomes are per-side and never leak before the scored result', () => {

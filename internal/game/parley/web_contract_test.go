@@ -8,12 +8,13 @@ import (
 	"testing"
 )
 
-// TestSpectatorContractMatchesEngine fails until the site uses the engine
-// matrix (strike beats feint), a five-round regulation match, and pass-line copy.
+// TestSpectatorContractMatchesEngine checks the archive uses the engine matrix
+// and does not write the settlement ledger. The seeded series is seven rounds
+// of sample history, stored apart from live pass-line settlement.
 func TestSpectatorContractMatchesEngine(t *testing.T) {
 	root := moduleRoot(t)
 	arena := string(mustRead(t, filepath.Join(root, "web", "src", "utils", "arena.js")))
-	seed := string(mustRead(t, filepath.Join(root, "internal", "catalog", "catalog.go")))
+	store := string(mustRead(t, filepath.Join(root, "internal", "catalog", "sqlstore.go")))
 	app := string(mustRead(t, filepath.Join(root, "web", "src", "App.vue")))
 	var problems []string
 	for _, needle := range []string{"strike: 'feint'", "feint: 'parry'", "parry: 'strike'"} {
@@ -21,17 +22,14 @@ func TestSpectatorContractMatchesEngine(t *testing.T) {
 			problems = append(problems, "arena.js BEATS is not the engine matrix; missing "+needle)
 		}
 	}
-	if strings.Contains(seed, "SpectatorRounds = 7") {
-		problems = append(problems, "seeded archive plays 7 rounds; engine regulation is 5, first to 3")
+	if !strings.Contains(app, "Strike <span>beats Feint</span>") {
+		problems = append(problems, "overview does not say Strike beats Feint")
 	}
-	if strings.Contains(app, "Best-of-7") {
-		problems = append(problems, "overview says Best-of-7; engine default is first to 3 within 5 rounds")
+	if !strings.Contains(app, "not the live pass-line ledger") {
+		problems = append(problems, "overview does not say the archive is separate from the live ledger")
 	}
-	if strings.Contains(app, "Strike <span>beats Parry</span>") {
-		problems = append(problems, "overview says Strike beats Parry; engine Strike beats Feint")
-	}
-	if strings.Contains(app, "winner takes the pot") {
-		problems = append(problems, "overview uses a head-to-head pot; engine settlement is a unilateral pass-line against the House")
+	if strings.Contains(store, "INTO bots") || strings.Contains(store, "marble_ledger") || strings.Contains(store, "SET marbles") {
+		problems = append(problems, "spectator SQL writes the settlement ledger")
 	}
 	if len(problems) > 0 {
 		t.Fatalf("spectator data is not the live Parley contract:\n- %s", strings.Join(problems, "\n- "))

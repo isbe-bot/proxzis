@@ -13,6 +13,17 @@ func TestDatabaseCredentialsAreNeverDefaulted(t *testing.T) {
 	}
 }
 
+func TestSQLitePathDefaultsToLocalFile(t *testing.T) {
+	t.Setenv("DATABASE_PATH", "")
+	if Load().DatabasePath != "bottagon.db" {
+		t.Fatal(Load().DatabasePath)
+	}
+	t.Setenv("DATABASE_PATH", "arena.db")
+	if Load().DatabasePath != "arena.db" {
+		t.Fatal(Load().DatabasePath)
+	}
+}
+
 func TestPortBounds(t *testing.T) {
 	for _, value := range []string{"-1", "0", "65536", "invalid"} {
 		t.Setenv("PORT", value)

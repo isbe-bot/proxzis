@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -10,13 +11,13 @@ func TestGenerateMatchesSpectatorArchive(t *testing.T) {
 		t.Fatalf("bots=%d matches=%d", len(bots), len(matches))
 	}
 	first := matches[0]
-	if first.ID != "AR-1048" || first.A.ID != "sovereign" || first.B.ID != "blinky" || first.Stake != 20 || first.Winner != "a" || first.Date != "2026-10-20T12:12:00.000Z" {
+	if first.ID != "AR-1048" || first.A.ID != "sovereign" || first.B.ID != "blinky" || first.Stake != 20 || first.Winner != "b" || first.Date != "2026-10-20T12:12:00.000Z" {
 		t.Fatalf("first match %+v", first)
 	}
-	if first.Score != (Score{2, 1}) || first.Rounds[0].A != "feint" || first.Rounds[0].B != "strike" {
+	if first.Score != (Score{1, 2}) || first.Rounds[0].A != "feint" || first.Rounds[0].B != "strike" {
 		t.Fatalf("first round %+v score %+v", first.Rounds[0], first.Score)
 	}
-	if first.Headline != "Sovereign-1 finds the edge." || first.Highlights[0] != "A 2–1 finish, built one read at a time." {
+	if first.Headline != "Blinky finds the edge." || first.Highlights[0] != "A 1–2 finish, built one read at a time." {
 		t.Fatalf("headline %q highlights %#v", first.Headline, first.Highlights)
 	}
 	seen := map[string]bool{}
@@ -35,8 +36,8 @@ func TestGenerateMatchesSpectatorArchive(t *testing.T) {
 		t.Fatalf("draws %d", draws)
 	}
 	want := map[string]Facts{
-		"sovereign": {Wins: 3, Losses: 4, Draws: 1, Earnings: -120, Played: 8},
-		"echo":      {Wins: 2, Losses: 5, Draws: 1, Earnings: -80, Played: 8},
+		"sovereign": {Wins: 4, Losses: 3, Draws: 1, Earnings: 120, Played: 8},
+		"echo":      {Wins: 5, Losses: 2, Draws: 1, Earnings: 80, Played: 8},
 	}
 	for _, bot := range bots {
 		if sum := bot.Tactics[0] + bot.Tactics[1] + bot.Tactics[2]; sum != 100 {
@@ -61,7 +62,11 @@ func TestGenerateMatchesSpectatorArchive(t *testing.T) {
 }
 
 func TestMemoryListSearchPageAndCreate(t *testing.T) {
-	store := NewMemory()
+	assertArchiveReads(t, NewMemory())
+}
+
+func assertArchiveReads(t *testing.T, store Store) {
+	t.Helper()
 	ctx := t.Context()
 	page, err := store.ListMatches(ctx, MatchQuery{Limit: 6})
 	if err != nil || page.Total != 32 || page.Page != 1 || len(page.Items.([]Match)) != 6 {
@@ -90,8 +95,15 @@ func TestMemoryListSearchPageAndCreate(t *testing.T) {
 	if err != nil || created.Facts.Record != "0-0-0" || created.Facts.Balance != 1000 {
 		t.Fatalf("%+v %v", created, err)
 	}
-	if _, err := store.CreateBot(ctx, CreateBot{Name: "new contender", Email: "other@example.com", Persona: "Reads the room and counters."}); err == nil {
-		t.Fatal("duplicate name accepted")
+	_, err = store.CreateBot(ctx, CreateBot{Name: "new contender", Email: "other@example.com", Persona: "Reads the room and counters."})
+	var invalid *ValidationError
+	if err == nil || !errors.As(err, &invalid) || !invalid.Conflict || invalid.Fields["name"] == "" {
+		t.Fatalf("duplicate name: %v", err)
+	}
+	_, err = store.CreateBot(ctx, CreateBot{Name: "Other Contender", Email: "owner@example.com", Persona: "Reads the room and counters."})
+	invalid = nil
+	if err == nil || !errors.As(err, &invalid) || !invalid.Conflict || invalid.Fields["email"] == "" {
+		t.Fatalf("duplicate email: %v", err)
 	}
 	house, err := store.ListBots(ctx, BotQuery{Role: "house", Limit: 10})
 	if err != nil || house.Total != 4 {

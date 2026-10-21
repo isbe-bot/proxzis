@@ -2,11 +2,8 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"time"
-
-	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/isbe-bot/bottagon/internal/catalog"
 	"github.com/isbe-bot/bottagon/internal/config"
@@ -14,21 +11,19 @@ import (
 
 func main() {
 	cfg := config.Load()
-	if cfg.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL must be set")
-	}
-	db, err := sql.Open("pgx", cfg.DatabaseURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	store, closer, err := catalog.OpenDatabase(ctx, cfg.DatabaseURL, cfg.DatabasePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
+	defer closer.Close()
+	if err := store.Seed(ctx); err != nil {
 		log.Fatal(err)
 	}
-	if err := catalog.OpenPostgres(db).Seed(ctx); err != nil {
-		log.Fatal(err)
+	if catalog.PostgresURL(cfg.DatabaseURL) {
+		log.Print("spectator archive seeded in postgres")
+		return
 	}
-	log.Print("spectator archive seeded")
+	log.Printf("spectator archive seeded in %s", cfg.DatabasePath)
 }

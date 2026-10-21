@@ -76,6 +76,19 @@ func TestCatalogListSearchPageLookupAndCreate(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatal(w.Code, w.Body.String())
 	}
+	if strings.Contains(w.Body.String(), "owner@example.com") {
+		t.Fatal("registration response includes the owner email")
+	}
+	roster := get("/bots?q=New+Contender")
+	if strings.Contains(roster.Body.String(), "owner@example.com") {
+		t.Fatal("roster includes the owner email")
+	}
+	trap := httptest.NewRequest(http.MethodPost, "/bots", strings.NewReader(`{"name":"Trap Bot","email":"trap@example.com","persona":"Reads the room and counters.","website":"http://spam.example"}`))
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, trap)
+	if w.Code != http.StatusBadRequest {
+		t.Fatal(w.Code, w.Body.String())
+	}
 	dup := httptest.NewRequest(http.MethodPost, "/bots", strings.NewReader(`{"name":"new contender","email":"other@example.com","persona":"Reads the room and counters."}`))
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, dup)

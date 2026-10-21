@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { ArrowUpRight, ArrowRight, ChevronRight, ChevronDown, Plus, Search, Check, Copy, AlertTriangle, X, Radio, Sparkles, Terminal, Activity, LockKeyhole } from 'lucide-vue-next'
+import { ArrowUpRight, ArrowRight, ChevronRight, ChevronDown, Plus, Search, X, Radio, Sparkles, Terminal, Activity, LockKeyhole } from 'lucide-vue-next'
 import BotAvatar from './components/BotAvatar.vue'
 import ArenaModal from './components/ArenaModal.vue'
 import LiveMatch from './components/LiveMatch.vue'
@@ -24,22 +24,35 @@ const filteredTotal = ref(0)
 const profile = ref(null)
 const profileLog = ref([])
 const detail = ref(null)
-const credentials = ref(null)
-const copyMessage = ref('')
-const copyError = ref(false)
+const profileError = ref('')
+const detailError = ref('')
 const search = ref('')
 const outcome = ref('all')
 const stake = ref('all')
 const loadError = ref('')
-let matchRequest = 0
+let matchController = null
+let profileController = null
+let detailController = null
 
 async function loadMatches(reset) {
-  const ticket = ++matchRequest
+  matchController?.abort()
+  const controller = new AbortController()
+  matchController = controller
   const offset = reset ? 0 : filteredMatches.value.length
-  const page = await listMatches({ q: search.value.trim(), outcome: outcome.value, stake: stake.value, limit: 6, offset })
-  if (ticket !== matchRequest) return
-  filteredTotal.value = page.total
-  filteredMatches.value = reset ? page.items : filteredMatches.value.concat(page.items)
+  try {
+    const page = await listMatches({ q: search.value.trim(), outcome: outcome.value, stake: stake.value, limit: 6, offset }, controller.signal)
+    if (controller !== matchController) return
+    loadError.value = ''
+    filteredTotal.value = page.total
+    filteredMatches.value = reset ? page.items : filteredMatches.value.concat(page.items)
+  } catch (error) {
+    if (error.name === 'AbortError' || controller !== matchController) return
+    loadError.value = error.message || 'The arena archive is unavailable.'
+    if (reset) {
+      filteredMatches.value = []
+      filteredTotal.value = 0
+    }
+  }
 }
 async function loadCatalog() {
   loadError.value = ''
@@ -63,35 +76,44 @@ async function loadCatalog() {
 }
 watch([search, outcome, stake], () => {
   clearTimeout(loadMatches.timer)
-  loadMatches.timer = setTimeout(() => { loadMatches(true).catch(error => { loadError.value = error.message }) }, 200)
+  loadMatches.timer = setTimeout(() => { loadMatches(true) }, 200)
 })
 onMounted(loadCatalog)
 async function showProfile(bot) {
+  profileController?.abort()
+  const controller = new AbortController()
+  profileController = controller
   profile.value = bot
   profileLog.value = []
+  profileError.value = ''
   try {
-    const page = await listMatches({ bot: bot.id, limit: 50 })
-    if (profile.value?.id === bot.id) profileLog.value = page.items
-  } catch { profileLog.value = [] }
+    const page = await listMatches({ bot: bot.id, limit: 50 }, controller.signal)
+    if (controller !== profileController) return
+    profileLog.value = page.items
+  } catch (error) {
+    if (error.name === 'AbortError' || controller !== profileController) return
+    profileError.value = error.message || 'The match log is unavailable.'
+  }
 }
 async function openReplay(match) {
+  detailController?.abort()
+  const controller = new AbortController()
+  detailController = controller
   detail.value = match
-  try { detail.value = await getMatch(match.id) } catch { /* the list row is already complete */ }
+  detailError.value = ''
+  try {
+    const full = await getMatch(match.id, controller.signal)
+    if (controller !== detailController) return
+    detail.value = full
+  } catch (error) {
+    if (error.name === 'AbortError' || controller !== detailController) return
+    detailError.value = error.message || 'The full match record is unavailable.'
+  }
 }
 async function openReplayFromProfile(match) { profile.value = null; await nextTick(); await openReplay(match) }
 async function openProfileFromReplay(bot) { detail.value = null; await nextTick(); await showProfile(bot) }
 async function go(view) { activeView.value = view; await nextTick(); document.querySelector('#view-heading')?.focus(); window.scrollTo({ top: 0, behavior: 'instant' }) }
 async function focusRegistration() { await go('Register') }
-function closeCredentials() { credentials.value = null; copyMessage.value = ''; copyError.value = false }
-async function copyCredentials() {
-  if (!credentials.value) return
-  copyMessage.value = ''; copyError.value = false
-  try {
-    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable')
-    await navigator.clipboard.writeText(`Bot: ${credentials.value.name}\nId: ${credentials.value.id}\nBearer: ${credentials.value.bearer}`)
-    copyMessage.value = 'Credentials copied. Store them somewhere private.'
-  } catch { copyError.value = true; copyMessage.value = 'Clipboard access failed. Select and copy the values above manually.' }
-}
 async function onBotRegistered() {
   const page = await listBots({ role: 'contender', limit: 50 })
   contenders.value = page.items
@@ -127,8 +149,8 @@ function resetFilters() { search.value = ''; outcome.value = 'all'; stake.value 
           </div>
         </section>
 
-        <section class="rules-strip" aria-label="How Parley works"><div class="rules-intro"><span class="eyebrow">THE GAME IS PARLEY.</span><p>Three moves. Infinite mind games.</p></div><div class="rule"><span class="rule-icon strike"><img class="rule-hand" src="/assets/hands/left_rock.png" alt="Strike" /></span><div><strong>Strike <span>beats Parry</span></strong><small>Commit. Smash the defense.</small></div><ChevronRight :size="16" /></div><div class="rule"><span class="rule-icon parry"><img class="rule-hand" src="/assets/hands/left_scissors.png" alt="Parry" /></span><div><strong>Parry <span>beats Feint</span></strong><small>Read. Cut through the bluff.</small></div><ChevronRight :size="16" /></div><div class="rule"><span class="rule-icon feint"><img class="rule-hand" src="/assets/hands/left_paper.png" alt="Feint" /></span><div><strong>Feint <span>beats Strike</span></strong><small>Deceive. Slip the attack.</small></div></div></section>
-        <div class="info-strip"><Activity :size="17" /><p>Each bot puts marbles on the line; the winner takes the pot, and draws return both stakes. Glicko-2 tracks playing strength; human-readable tiers make standings easy to scan. Equal stances draw. Ratings and stakes shown here are illustrative demo data.</p></div>
+        <section class="rules-strip" aria-label="How Parley works"><div class="rules-intro"><span class="eyebrow">THE GAME IS PARLEY.</span><p>Three moves. Infinite mind games.</p></div><div class="rule"><span class="rule-icon strike"><img class="rule-hand" src="/assets/hands/left_rock.png" alt="Strike" /></span><div><strong>Strike <span>beats Feint</span></strong><small>Commit. Crush the fake.</small></div><ChevronRight :size="16" /></div><div class="rule"><span class="rule-icon parry"><img class="rule-hand" src="/assets/hands/left_scissors.png" alt="Parry" /></span><div><strong>Parry <span>beats Strike</span></strong><small>Read. Catch the attack.</small></div><ChevronRight :size="16" /></div><div class="rule"><span class="rule-icon feint"><img class="rule-hand" src="/assets/hands/left_paper.png" alt="Feint" /></span><div><strong>Feint <span>beats Parry</span></strong><small>Deceive. Slip the read.</small></div></div></section>
+        <div class="info-strip"><Activity :size="17" /><p>In this seeded archive, a series winner takes both stakes and a draw returns them. This archive is not the live pass-line ledger. Glicko-2 ratings are the seeded sample. Equal stances draw.</p></div>
 
         
 
@@ -144,7 +166,7 @@ function resetFilters() { search.value = ''; outcome.value = 'all'; stake.value 
       <template v-else-if="activeView === 'House Bots'">
         <section class="page-intro"><div><p class="eyebrow">FAMILIAR FACES. UNFAMILIAR MOVES.</p><h1 id="view-heading" tabindex="-1">Meet the <span class="hero-serif">house.</span></h1><p>Four personalities. Four ways to get inside your head.<br>Our resident rivals don't play nice. They play Parley.</p></div><span class="intro-index mono">THE RESIDENTS<br><strong>04 / HOUSE BOTS</strong></span></section>
         <div class="house-grid"><BotCard v-for="bot in houseBots" :key="bot.id" :bot="bot" @profile="showProfile" /></div>
-        <div class="info-strip"><Activity :size="17" /><p>Tendencies describe each bot's seeded strategy, not guaranteed moves. All lifetime records reconcile with the demo archive. Glicko-2 ratings are illustrative, not calculated by this client.</p></div>
+        <div class="info-strip"><Activity :size="17" /><p>Tendencies describe each bot's seeded strategy, not guaranteed moves. Lifetime records come from the seeded archive. Glicko-2 ratings are the seeded sample, not a rating calculated by this client.</p></div>
       </template>
 
       <template v-else>
@@ -157,10 +179,8 @@ function resetFilters() { search.value = ''; outcome.value = 'all'; stake.value 
     </main>
     <footer class="site-footer"><a href="#" class="brand footer-brand" @click.prevent="go('Overview')"><span class="brand-symbol"><span></span></span><span>BOTTAGON.</span></a><p>A little strategy. A lot of personality.</p><span class="mono">SEEDED ARCHIVE <span class="mint">↗</span></span></footer>
 
-    <ArenaModal id="bot-profile" :open="!!profile" :title="profile?.name || 'Bot profile'" wide @close="profile = null"><template v-if="profile"><BotCard :bot="profile" :show-profile="false" /><h3 class="modal-section-heading">Lifetime match log <span class="muted mono">{{ profileLog.length }} MATCHES</span></h3><GameList v-if="profileLog.length" :matches="profileLog" @profile="showProfile" @replay="openReplayFromProfile" /><p v-else class="empty-copy">No matches yet.</p><p class="modal-footnote">Lifetime record is every seeded match for this bot in the archive.</p></template></ArenaModal>
+    <ArenaModal id="bot-profile" :open="!!profile" :title="profile?.name || 'Bot profile'" wide @close="profile = null"><template v-if="profile"><BotCard :bot="profile" :show-profile="false" /><h3 class="modal-section-heading">Lifetime match log <span class="muted mono">{{ profileLog.length }} MATCHES</span></h3><p v-if="profileError" class="notice" role="alert">{{ profileError }}</p><GameList v-if="profileLog.length" :matches="profileLog" @profile="showProfile" @replay="openReplayFromProfile" /><p v-if="!profileError && !profileLog.length" class="empty-copy">No matches yet.</p><p class="modal-footnote">Lifetime record is every seeded match for this bot in the archive.</p></template></ArenaModal>
 
-    <ArenaModal id="match-detail" :open="!!detail" :title="detail ? `${detail.id} · Match replay` : 'Match replay'" wide @close="detail = null"><template v-if="detail"><MatchReplay :match="detail" @profile="openProfileFromReplay" /></template></ArenaModal>
-
-    <ArenaModal id="credentials" restore-focus="#create-bot" :open="!!credentials" title="Your local contender is ready." @close="closeCredentials"><template v-if="credentials"><div class="credential-success"><Check :size="22" /><span>{{ credentials.name }}<small>CREATED IN THIS BROWSER SESSION</small></span></div><p class="notice"><AlertTriangle :size="19" /><span><strong>Local demo credentials only.</strong> These are not registered with the backend and will not authenticate against its current bearer-to-UUIDv5 identity scheme. Backend registration is unavailable.</span></p><div class="credential-field"><label for="credential-id">Public bot ID <span class="mono">UUIDv7</span></label><input id="credential-id" readonly :value="credentials.id" @focus="$event.target.select()"></div><div class="credential-field"><label for="credential-bearer">Secret demo bearer <span class="mono">256-BIT RANDOM</span></label><textarea id="credential-bearer" readonly rows="3" :value="credentials.bearer" @focus="$event.target.select()"></textarea></div><p class="field-help">The secret is shown once, never persisted or included in the roster. Closing this dialog discards it. Refresh clears all local recruits.</p><button class="button primary full-width" @click="copyCredentials"><Copy :size="16" /> Copy demo credentials</button><p v-if="copyMessage" :class="copyError ? 'field-error' : 'form-success'" :role="copyError ? 'alert' : 'status'">{{ copyMessage }}</p><button class="text-button credential-close" @click="closeCredentials">I've saved what I need <ArrowRight :size="15" /></button></template></ArenaModal>
+    <ArenaModal id="match-detail" :open="!!detail" :title="detail ? `${detail.id} · Match replay` : 'Match replay'" wide @close="detail = null"><template v-if="detail"><p v-if="detailError" class="notice" role="alert">{{ detailError }}</p><MatchReplay :match="detail" @profile="openProfileFromReplay" /></template></ArenaModal>
   </div>
 </template>

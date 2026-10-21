@@ -35,3 +35,6 @@ vendor/
 # Docker / Local DB mount data
 .data/
 pgdata/
+/bottagon.db
+/bottagon.db-wal
+/bottagon.db-shm

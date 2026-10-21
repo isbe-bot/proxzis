@@ -1,5 +1,5 @@
 export const STANCES = ['strike', 'feint', 'parry']
-export const BEATS = Object.freeze({ strike: 'parry', parry: 'feint', feint: 'strike' })
+export const BEATS = Object.freeze({ strike: 'feint', feint: 'parry', parry: 'strike' })
 
 export function resolveClash(a, b) {
   if (!STANCES.includes(a) || !STANCES.includes(b)) throw new Error('Unknown stance')
@@ -50,11 +50,12 @@ export function validateRegistration(name, email, persona, bots) {
   const trimmedName = (name || '').trim()
   const trimmedEmail = (email || '').trim().toLowerCase()
   const trimmedPersona = (persona || '').trim()
+  const chars = value => Array.from(value).length
 
   // Bot Name validation
   if (!trimmedName) {
     errors.name = 'Bot name is required.'
-  } else if (trimmedName.length < 3 || trimmedName.length > 24) {
+  } else if (chars(trimmedName) < 3 || chars(trimmedName) > 24) {
     errors.name = 'Bot name must be between 3 and 24 characters.'
   } else if (!/^[\p{L}\p{N}][\p{L}\p{N} _-]*$/u.test(trimmedName)) {
     errors.name = 'Must start with a letter/number and use letters, numbers, spaces, _ or -.'
@@ -71,14 +72,12 @@ export function validateRegistration(name, email, persona, bots) {
     errors.email = 'Email address is too long.'
   } else if (!EMAIL_REGEX.test(trimmedEmail)) {
     errors.email = 'Enter a valid owner email address.'
-  } else if (bots.some(b => (b.email || '').trim().toLowerCase() === trimmedEmail)) {
-    errors.email = 'This email is already associated with an active bot.'
   }
 
   // Persona validation
   if (!trimmedPersona) {
     errors.persona = 'Bot persona description is required.'
-  } else if (trimmedPersona.length < 12 || trimmedPersona.length > 180) {
+  } else if (chars(trimmedPersona) < 12 || chars(trimmedPersona) > 180) {
     errors.persona = 'Persona description must be between 12 and 180 characters.'
   }
 

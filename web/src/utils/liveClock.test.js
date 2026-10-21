@@ -90,8 +90,8 @@ test('timeline normalizes invalid elapsed values and supports actual round count
   assert.throws(() => liveTimeline(0, 0), RangeError)
 })
 
-test('game rules follow strike > parry > feint > strike', () => {
-  assert.deepEqual(BEATS, { strike: 'parry', parry: 'feint', feint: 'strike' })
+test('game rules follow strike > feint > parry > strike', () => {
+  assert.deepEqual(BEATS, { strike: 'feint', feint: 'parry', parry: 'strike' })
   for (const [stance, beaten] of Object.entries(BEATS)) {
     assert.equal(resolveClash(stance, beaten), 'a')
     assert.equal(resolveClash(beaten, stance), 'b')

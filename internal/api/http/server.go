@@ -143,7 +143,7 @@ func (s *Server) requireBot(w http.ResponseWriter, r *http.Request) (matchmaker.
 	bot, err := s.authenticateBot(r)
 	if err != nil {
 		w.Header().Set("WWW-Authenticate", `Bearer realm="bottagon"`)
-		http.Error(w, "valid bearer token required", http.StatusUnauthorized)
+		writeJSONError(w, http.StatusUnauthorized, "valid bearer token required")
 		return matchmaker.BotInfo{}, false
 	}
 	return bot, true
@@ -157,7 +157,7 @@ func boundaryHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		if r.ContentLength > maxRequestBodyBytes {
-			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
 			return
 		}
 		if r.Body == nil {
@@ -195,9 +195,9 @@ func decodeBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 	if err != nil {
 		var limit *http.MaxBytesError
 		if errors.As(err, &limit) {
-			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			writeJSONError(w, http.StatusRequestEntityTooLarge, "request body too large")
 		} else {
-			http.Error(w, "invalid request body", http.StatusBadRequest)
+			writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		}
 		return false
 	}
@@ -254,10 +254,16 @@ func (e actionError) Error() string { return e.message }
 func writeActionError(w http.ResponseWriter, err error) {
 	var e actionError
 	if errors.As(err, &e) {
-		http.Error(w, e.message, e.status)
+		writeJSONError(w, e.status, e.message)
 	} else {
-		http.Error(w, "request failed", http.StatusInternalServerError)
+		writeJSONError(w, http.StatusInternalServerError, "request failed")
 	}
+}
+
+func writeJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 func (s *Server) findMatch(ctx context.Context, bot matchmaker.BotInfo, req FindMatchRequest) (*matchmaker.MatchSession, error) {
@@ -368,7 +374,7 @@ func (s *Server) handleGetCurrentMatch(w http.ResponseWriter, r *http.Request) {
 
 	session, exists := s.queue.GetSession(bot.ID)
 	if !exists {
-		http.Error(w, "no active match found", http.StatusNotFound)
+		writeJSONError(w, http.StatusNotFound, "no active match found")
 		return
 	}
 

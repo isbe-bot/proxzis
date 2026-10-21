@@ -1,6 +1,6 @@
 // Package catalog is the spectator archive: bots, matches, and the exhibition.
-// The seeded rows are sample parlor history for the site. They are not live
-// matchmaking state.
+// Rows live in spectator tables, apart from the settlement ledger. The seeded
+// rows are sample parlor history for the site. They are not live matchmaking state.
 package catalog
 
 import (
@@ -27,7 +27,20 @@ var ErrNotFound = errors.New("not found")
 // FieldErrors is a rejected registration, keyed by form field.
 type FieldErrors map[string]string
 
-func (e FieldErrors) Error() string { return "invalid registration" }
+// ValidationError is a registration the server refused. Conflict is a duplicate
+// name or email. Other failures are malformed input. Status is chosen from
+// Conflict, not from the wording of a message.
+type ValidationError struct {
+	Fields   FieldErrors
+	Conflict bool
+}
+
+func (e *ValidationError) Error() string {
+	if e != nil && e.Conflict {
+		return "registration conflict"
+	}
+	return "invalid registration"
+}
 
 type Facts struct {
 	Wins       int    `json:"wins"`
@@ -45,7 +58,7 @@ type Facts struct {
 type Bot struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
-	Email   string `json:"email,omitempty"`
+	Email   string `json:"-"`
 	Tag     string `json:"tag"`
 	House   bool   `json:"house"`
 	Rating  int    `json:"rating"`
@@ -120,7 +133,8 @@ type CreateBot struct {
 	Persona string
 }
 
-// Store is the spectator read model. Postgres is the daemon implementation.
+// Store is the spectator read model. The daemon opens SQLite, or Postgres when
+// DATABASE_URL is a postgres URL.
 type Store interface {
 	ListBots(ctx context.Context, q BotQuery) (Page, error)
 	GetBot(ctx context.Context, id string) (Bot, error)
@@ -186,7 +200,12 @@ var (
 	emailPattern = regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$`)
 )
 
-func ValidateCreate(in CreateBot, existing []Bot) (CreateBot, FieldErrors) {
+const (
+	msgNameTaken  = "A bot with this name is already registered."
+	msgEmailTaken = "This email is already associated with an active bot."
+)
+
+func ValidateCreate(in CreateBot) (CreateBot, *ValidationError) {
 	name := strings.TrimSpace(in.Name)
 	email := strings.ToLower(strings.TrimSpace(in.Email))
 	persona := strings.TrimSpace(in.Persona)
@@ -215,18 +234,26 @@ func ValidateCreate(in CreateBot, existing []Bot) (CreateBot, FieldErrors) {
 	case utf8.RuneCountInString(persona) < 12 || utf8.RuneCountInString(persona) > 180:
 		errs["persona"] = "Persona description must be between 12 and 180 characters."
 	}
-	for _, bot := range existing {
-		if errs["name"] == "" && strings.EqualFold(strings.TrimSpace(bot.Name), name) {
-			errs["name"] = "A bot with this name is already registered."
-		}
-		if errs["email"] == "" && bot.Email != "" && strings.EqualFold(bot.Email, email) {
-			errs["email"] = "This email is already associated with an active bot."
-		}
-	}
 	if len(errs) > 0 {
-		return CreateBot{}, errs
+		return CreateBot{}, &ValidationError{Fields: errs}
 	}
 	return CreateBot{Name: name, Email: email, Persona: persona}, nil
+}
+
+func conflictWith(existing []Bot, in CreateBot) *ValidationError {
+	errs := FieldErrors{}
+	for _, bot := range existing {
+		if errs["name"] == "" && strings.EqualFold(strings.TrimSpace(bot.Name), in.Name) {
+			errs["name"] = msgNameTaken
+		}
+		if errs["email"] == "" && bot.Email != "" && strings.EqualFold(bot.Email, in.Email) {
+			errs["email"] = msgEmailTaken
+		}
+	}
+	if len(errs) == 0 {
+		return nil
+	}
+	return &ValidationError{Fields: errs, Conflict: true}
 }
 
 func reserved(name string) bool {

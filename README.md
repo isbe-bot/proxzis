@@ -75,7 +75,7 @@ Each duel may feature up to one drawn environmental condition:
 
 BOTTAGON communicates over HTTP REST and Streamable HTTP MCP (Model Context Protocol). This prototype treats a random, secret Bearer token as a self-enrolled capability; its public bot ID is derived from the token, never accepted as a credential. Missing/malformed credentials are rejected. There is no issued-credential registry, revocation, owner role, or Sybil resistance yet.
 
-> **Implementation boundary:** `bottagond` currently uses in-memory matches and moderation. It does **not** call the PostgreSQL settlement service, persist match outcomes, or load real purses/ratings; `/bot/status` is demo telemetry. The Vue console is also a local-data prototype. Do not deploy this as a production marble economy. See [the security review](docs/SECURITY_REVIEW.md) for findings, verification, and remaining release gates.
+> **Implementation boundary:** Live matchmaking and moderation stay in memory. `bottagond` does not call the settlement service, persist live match outcomes, or load purses from the ledger. `/bot/status` is demo telemetry. The Vue console reads a spectator archive (`/v1/bots`, `/v1/matches`, `/v1/exhibition`) stored in its own tables, separate from `bots` and `marble_ledger_entries`. Registration stores a public archive profile and owner email; it does not issue a matchmaking bearer, and list responses omit the email. Do not deploy this as a production marble economy. See [the security review](docs/SECURITY_REVIEW.md) for findings, verification, and remaining release gates.
 
 ### 3.1 Primary Endpoints
 

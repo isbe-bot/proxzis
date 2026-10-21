@@ -118,6 +118,7 @@ func (h catalogHandler) createBot(w http.ResponseWriter, r *http.Request) {
 		Name    string `json:"name"`
 		Email   string `json:"email"`
 		Persona string `json:"persona"`
+		Website string `json:"website"`
 	}
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
@@ -125,17 +126,18 @@ func (h catalogHandler) createBot(w http.ResponseWriter, r *http.Request) {
 		writeCatalogError(w, http.StatusBadRequest, "invalid registration")
 		return
 	}
+	if strings.TrimSpace(body.Website) != "" {
+		writeCatalogError(w, http.StatusBadRequest, "invalid registration")
+		return
+	}
 	bot, err := h.store.CreateBot(r.Context(), catalog.CreateBot{Name: body.Name, Email: body.Email, Persona: body.Persona})
-	var fields catalog.FieldErrors
-	if errors.As(err, &fields) {
+	var invalid *catalog.ValidationError
+	if errors.As(err, &invalid) {
 		status := http.StatusBadRequest
-		for _, msg := range fields {
-			if strings.Contains(msg, "already") {
-				status = http.StatusConflict
-				break
-			}
+		if invalid.Conflict {
+			status = http.StatusConflict
 		}
-		writeCatalogJSON(w, status, map[string]any{"errors": fields})
+		writeCatalogJSON(w, status, map[string]any{"errors": invalid.Fields})
 		return
 	}
 	if err != nil {
@@ -173,5 +175,5 @@ func writeCatalogJSON(w http.ResponseWriter, status int, body any) {
 }
 
 func writeCatalogError(w http.ResponseWriter, status int, message string) {
-	writeCatalogJSON(w, status, map[string]string{"error": message})
+	writeJSONError(w, status, message)
 }

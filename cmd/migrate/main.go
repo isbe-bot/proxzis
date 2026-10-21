@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
+	"github.com/isbe-bot/bottagon/internal/catalog"
 	"github.com/isbe-bot/bottagon/internal/config"
 	"github.com/isbe-bot/bottagon/internal/obs"
 )
@@ -27,9 +30,21 @@ func main() {
 	cfg := config.Load()
 	logger := obs.InitLogger("info", "development")
 
-	if cfg.DatabaseURL == "" {
-		logger.Error("DATABASE_URL must be explicitly configured")
-		os.Exit(1)
+	if !catalog.PostgresURL(cfg.DatabaseURL) {
+		if command != "up" && command != "status" {
+			logger.Error("the sqlite archive schema is created in place; delete the file to start over", slog.String("path", cfg.DatabasePath), slog.String("command", command))
+			os.Exit(1)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, closer, err := catalog.OpenDatabase(ctx, "", cfg.DatabasePath)
+		if err != nil {
+			logger.Error("failed to prepare sqlite archive", slog.Any("error", err))
+			os.Exit(1)
+		}
+		defer closer.Close()
+		logger.Info("sqlite schema ready", slog.String("path", cfg.DatabasePath))
+		return
 	}
 	logger.Info("connecting to database for migrations")
 

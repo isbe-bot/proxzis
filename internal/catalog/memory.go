@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-// Memory is the in-process archive used by tests. The daemon uses Postgres.
+// Memory is the in-process archive used by tests. The daemon uses SQLite or Postgres.
 type Memory struct {
 	mu         sync.Mutex
 	bots       []Bot
@@ -140,9 +140,12 @@ func (m *Memory) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	clean, errs := ValidateCreate(in, m.bots)
-	if len(errs) > 0 {
-		return Bot{}, errs
+	clean, verr := ValidateCreate(in)
+	if verr != nil {
+		return Bot{}, verr
+	}
+	if conflict := conflictWith(m.bots, clean); conflict != nil {
+		return Bot{}, conflict
 	}
 	bot := Bot{
 		ID: NewBotSlug(clean.Name), Name: clean.Name, Email: clean.Email, Tag: "NEW CONTENDER",

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +15,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/isbe-bot/bottagon/internal/api/http"
@@ -44,7 +42,7 @@ func main() {
 		slog.String("version", Version),
 	)
 
-	r, _ := newRouter(0, openCatalog(cfg.DatabaseURL, logger))
+	r, _ := newRouter(0, openCatalog(cfg, logger))
 
 	serverCtx, stopServer := context.WithCancel(context.Background())
 	defer stopServer()
@@ -83,30 +81,24 @@ func main() {
 
 // newRouter is the daemon surface: health, metrics, discovery, REST, and MCP.
 // queueTimeout of zero uses the production matchmaking wait.
-func openCatalog(databaseURL string, logger *slog.Logger) catalog.Store {
-	if databaseURL == "" {
-		logger.Info("spectator archive disabled", slog.String("reason", "DATABASE_URL is unset"))
-		return nil
-	}
-	db, err := sql.Open("pgx", databaseURL)
+func openCatalog(cfg *config.Config, logger *slog.Logger) catalog.Store {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	store, closer, err := catalog.OpenDatabase(ctx, cfg.DatabaseURL, cfg.DatabasePath)
 	if err != nil {
 		logger.Error("spectator archive disabled", slog.Any("error", err))
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		logger.Error("spectator archive disabled", slog.Any("error", err))
-		_ = db.Close()
-		return nil
-	}
-	store := catalog.OpenPostgres(db)
 	if err := store.SeedIfEmpty(ctx); err != nil {
 		logger.Error("spectator seed failed", slog.Any("error", err))
-		_ = db.Close()
+		_ = closer.Close()
 		return nil
 	}
-	logger.Info("spectator archive ready")
+	if catalog.PostgresURL(cfg.DatabaseURL) {
+		logger.Info("spectator archive ready", slog.String("driver", "postgres"))
+	} else {
+		logger.Info("spectator archive ready", slog.String("driver", "sqlite"), slog.String("path", cfg.DatabasePath))
+	}
 	return store
 }
 

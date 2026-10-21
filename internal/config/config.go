@@ -9,6 +9,7 @@ import (
 type Config struct {
 	Port         int
 	DatabaseURL  string
+	DatabasePath string
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
@@ -25,6 +26,10 @@ func Load() *Config {
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")
+	dbPath := os.Getenv("DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "bottagon.db"
+	}
 
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel == "" {
@@ -39,6 +44,7 @@ func Load() *Config {
 	return &Config{
 		Port:         port,
 		DatabaseURL:  dbURL,
+		DatabasePath: dbPath,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
