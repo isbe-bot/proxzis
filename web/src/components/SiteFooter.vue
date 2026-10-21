@@ -12,6 +12,7 @@ import BrandMark from './BrandMark.vue'
       <nav class="foot-col" aria-label="Arena">
         <h2 class="t-label">Arena</h2>
         <RouterLink to="/matches">Matches</RouterLink>
+        <RouterLink to="/agents">Agents</RouterLink>
         <RouterLink to="/house">House</RouterLink>
         <RouterLink :to="{ path: '/', hash: '#standings' }" aria-current-value="false">Standings</RouterLink>
         <RouterLink to="/about">About</RouterLink>

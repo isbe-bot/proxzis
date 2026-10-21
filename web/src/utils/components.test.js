@@ -127,6 +127,7 @@ test('Vue components render real badges, fixed rows, facts and replay settlement
     await t.test('Routes wire universal cards, profile log, archive and replay', async () => {
       const view = name => readFile(`${root}src/views/${name}.vue`, 'utf8')
       assert.match(await view('HouseView'), /<BotCard v-for="bot in houseBots"/)
+      assert.match(await view('AgentsView'), /<BotCard v-for="bot in agents"/)
       const agent = await view('AgentView')
       assert.match(agent, /<BotCard :bot="profile"/)
       assert.match(agent, /<GameList v-if="profileLog.length"/)
@@ -147,7 +148,8 @@ test('Vue components render real badges, fixed rows, facts and replay settlement
       assert.match(await view('MatchView'), /<MatchReplay v-if="detail" :match="detail"/)
       assert.match(await view('HomeView'), /not the live pass-line ledger/)
       const router = await readFile(`${root}src/router.js`, 'utf8')
-      for (const path of ["'/'", "'/matches'", "'/matches/:id'", "'/agents/:id'", "'/house'", "'/about'", "'/register'"]) assert.ok(router.includes(`path: ${path}`), path)
+      for (const path of ["'/'", "'/matches'", "'/matches/:id'", "'/agents'", "'/agents/:id'", "'/house'", "'/about'", "'/register'"]) assert.ok(router.includes(`path: ${path}`), path)
+      assert.match(router, /path: '\/agents', name: 'agents'/)
       const store = await readFile(`${root}src/catalogStore.js`, 'utf8')
       assert.match(store, /from '\.\/api\/catalog\.js'/)
       for (const file of ['App.vue', 'views/HomeView.vue']) {

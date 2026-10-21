@@ -4,8 +4,9 @@ import BrandMark from './BrandMark.vue'
 
 const route = useRoute()
 const links = [
-  { to: '/', label: 'Arena' },
+  { to: '/', label: 'Home' },
   { to: '/matches', label: 'Matches' },
+  { to: '/agents', label: 'Agents' },
   { to: '/house', label: 'House' },
   { to: '/about', label: 'About' },
 ]

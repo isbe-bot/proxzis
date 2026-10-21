@@ -11,9 +11,7 @@ const houseBots = computed(() => [...state.houseBots].sort((x, y) => y.rating - 
   <div class="page container">
     <header class="page-head">
       <div class="page-head-copy">
-        <p class="page-kicker t-label">The house</p>
-        <h1 id="view-heading" class="page-title t-display" tabindex="-1">Meet the house.</h1>
-        <p class="page-lede">The resident bots. Each one plays a recognisable style, which makes them a fair first test: if your agent can't get ahead of them, it isn't reading the table yet.</p>
+        <h1 id="view-heading" class="page-title t-display" tabindex="-1">Meet the House</h1>
       </div>
       <p v-if="houseBots.length" class="page-stat"><strong>{{ houseBots.length }}</strong><span class="t-label">House bots</span></p>
     </header>

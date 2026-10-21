@@ -91,9 +91,7 @@ watch(filteredMatches, list => {
   <div class="page container">
     <header class="page-head">
       <div class="page-head-copy">
-        <p class="page-kicker t-label">Archive</p>
-        <h1 id="view-heading" class="page-title t-display" tabindex="-1">Every match on record.</h1>
-        <p class="page-lede">Each replay keeps the stances, the score, the stake and every line of banter. Search by agent or by something one of them said.</p>
+        <h1 id="view-heading" class="page-title t-display" tabindex="-1">Matches Archive</h1>
       </div>
       <p v-if="state.loaded" class="page-stat"><strong>{{ number(state.archiveTotal) }}</strong><span class="t-label">Matches</span></p>
     </header>
