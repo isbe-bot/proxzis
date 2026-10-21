@@ -40,7 +40,7 @@ func TestE2E_APIAndMCP(t *testing.T) {
 			t.Fatalf("llms.txt %d: %s", status, body)
 		}
 		status, rules := c.raw(t, http.MethodGet, "/v1/rules", "", nil)
-		if status != http.StatusOK || !strings.Contains(rules, "Beats Feint") || !strings.Contains(rules, "five regulation rounds") {
+		if status != http.StatusOK || !strings.Contains(rules, "Rock blunts Scissors") || !strings.Contains(rules, "five regulation rounds") {
 			t.Fatalf("rules %d: %s", status, rules)
 		}
 	})
@@ -68,7 +68,7 @@ func TestE2E_APIAndMCP(t *testing.T) {
 			t.Fatal("report is REST-only and must not be an MCP tool")
 		}
 		rules := c.mustTool(t, e2eHouse, "get_rules", map[string]any{})
-		if rules.isError || !strings.Contains(rules.text(), "Beats Feint") {
+		if rules.isError || !strings.Contains(rules.text(), "Rock blunts Scissors") {
 			t.Fatalf("get_rules: error=%v %s", rules.isError, rules.text())
 		}
 		statusTool := c.mustTool(t, e2eHouse, "bot_status", map[string]any{})
@@ -95,7 +95,7 @@ func TestE2E_APIAndMCP(t *testing.T) {
 		if err := json.Unmarshal([]byte(found.text()), &env); err != nil {
 			t.Fatalf("find_match: %v %s", err, found.text())
 		}
-		if env.MatchID == "" || !env.Opponent.IsHouse || env.Opponent.Name != "Blinky" {
+		if env.MatchID == "" || !env.Opponent.IsHouse || env.Opponent.Name != "MsCloud" {
 			t.Fatalf("house envelope: %+v", env)
 		}
 		if len(env.ValidActions) != 3 {
@@ -115,7 +115,7 @@ func TestE2E_APIAndMCP(t *testing.T) {
 		}
 		var last httpapi.TurnResponse
 		for turn := 1; turn <= 8; turn++ {
-			played := c.mustTool(t, e2eHouse, "play_turn", map[string]any{"stance": "strike", "side_bet": 0, "say": "Onward."})
+			played := c.mustTool(t, e2eHouse, "play_turn", map[string]any{"stance": "rock", "side_bet": 0, "say": "Onward."})
 			if played.isError {
 				t.Fatalf("turn %d: %s", turn, played.text())
 			}
@@ -195,7 +195,7 @@ func TestE2E_APIAndMCP(t *testing.T) {
 		var wantYou, wantOpp int
 		play := func(sideBet int, say string) (httpapi.TurnResponse, httpapi.TurnResponse) {
 			t.Helper()
-			res, err := parley.ResolveRound(parley.StanceStrike, parley.StanceFeint, parley.ModifierNone)
+			res, err := parley.ResolveRound(parley.StanceRock, parley.StanceScissors, parley.ModifierNone)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -208,7 +208,7 @@ func TestE2E_APIAndMCP(t *testing.T) {
 			left := make(chan out, 1)
 			right := make(chan out, 1)
 			go func() {
-				res, err := c.tool(e2ePeerA, "play_turn", map[string]any{"stance": "strike", "side_bet": sideBet, "say": say})
+				res, err := c.tool(e2ePeerA, "play_turn", map[string]any{"stance": "rock", "side_bet": sideBet, "say": say})
 				var env httpapi.TurnResponse
 				if err != nil {
 					left <- out{err: err}
@@ -223,7 +223,7 @@ func TestE2E_APIAndMCP(t *testing.T) {
 			}()
 			go func() {
 				var env httpapi.TurnResponse
-				code, body, err := c.do(http.MethodPost, "/v1/match/turn", e2ePeerB, map[string]any{"stance": "feint", "side_bet": 0})
+				code, body, err := c.do(http.MethodPost, "/v1/match/turn", e2ePeerB, map[string]any{"stance": "scissors", "side_bet": 0})
 				if err != nil {
 					right <- out{err: err}
 					return
@@ -257,7 +257,7 @@ func TestE2E_APIAndMCP(t *testing.T) {
 		if code := c.rest(t, http.MethodGet, "/v1/match/current", e2ePeerA, nil, &snap); code != http.StatusOK || snap.MatchID != a.MatchID || snap.Scores != a.Scores {
 			t.Fatalf("current drift: %d %+v", code, snap)
 		}
-		rejected := c.mustTool(t, e2ePeerA, "play_turn", map[string]any{"stance": "strike", "side_bet": 9})
+		rejected := c.mustTool(t, e2ePeerA, "play_turn", map[string]any{"stance": "rock", "side_bet": 9})
 		if !rejected.isError {
 			t.Fatalf("changed side bet accepted: %s", rejected.text())
 		}

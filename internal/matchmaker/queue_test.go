@@ -86,8 +86,15 @@ func TestMatchmaker_HouseBotFallbackOnTimeout(t *testing.T) {
 		t.Errorf("expected session to contain a HouseBot")
 	}
 
-	if !session.P2.IsHouse {
-		t.Errorf("expected opponent P2 to be marked as house bot")
+	if !session.P2.IsHouse || session.P2.Name != "MsCloud" || session.P2.ID.String() != "b0000000-0000-0000-0000-000000000008" {
+		t.Errorf("expected MsCloud, got %+v", session.P2)
+	}
+	again, err := NewQueue().FindMatch(context.Background(), loneBot, 10, 50, 20*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.P2.ID != session.P2.ID {
+		t.Errorf("house seat changed from %s to %s", session.P2.ID, again.P2.ID)
 	}
 }
 

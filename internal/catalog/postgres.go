@@ -3,7 +3,7 @@ package catalog
 import "database/sql"
 
 // Postgres serves the spectator archive from the migrated database.
-// OpenDatabase expects goose migrations, including 00006, to already be applied.
+// OpenDatabase expects goose migrations, through 00007, to already be applied.
 type Postgres struct {
 	*sqlStore
 }

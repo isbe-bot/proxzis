@@ -116,17 +116,17 @@ var randomBanter = []string{
 	"A spirited contest indeed.",
 }
 
-var stances = []string{"strike", "parry", "feint"}
+var stances = []string{"rock", "paper", "scissors"}
 
 func chooseStance(turn *httpapi.TurnResponse, rng *rand.Rand) (string, int, string) {
 	stance := stances[rng.Intn(len(stances))]
 	say := randomBanter[rng.Intn(len(randomBanter))]
 
 	// Simple heuristic based on modifier card
-	if turn.ActiveCard.ID == "FeintSurge" && rng.Float32() < 0.6 {
-		stance = "feint"
+	if turn.ActiveCard.ID == "ScissorsSurge" && rng.Float32() < 0.6 {
+		stance = "scissors"
 	} else if turn.ActiveCard.ID == "MirrorTiePenalty" && rng.Float32() < 0.5 {
-		stance = "parry"
+		stance = "paper"
 	}
 
 	sideBet := 0

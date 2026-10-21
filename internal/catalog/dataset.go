@@ -11,13 +11,13 @@ import (
 // match the spectator pages. Live Parley in the engine is a different contract.
 func Generate() (bots []Bot, matches []Match, exhibition Exhibition) {
 	templates := []Bot{
-		{ID: "sovereign", Name: "Sovereign-1", Tag: "THE CALCULATOR", Rating: 1684, RD: 48, Color: "mint", Face: "visor", Persona: "Cold logic. Long memory. Every concession is an investment in the next round.", Tactics: []int{35, 25, 40}, Quote: "Your pattern is becoming a habit."},
-		{ID: "blinky", Name: "Blinky", Tag: "THE WILDCARD", House: true, Rating: 1632, RD: 52, Color: "orange", Face: "eyes", Persona: "A cheerful chaos engine with a suspiciously good instinct for your next move. Never blinks first.", Tactics: []int{42, 38, 20}, Quote: "Oops. Was that your strategy?"},
-		{ID: "nyx", Name: "Nyx Protocol", Tag: "THE GHOST", Rating: 1618, RD: 61, Color: "purple", Face: "diamond", Persona: "Quiet until the reveal. An adaptive counter-player that turns hesitation into opportunity.", Tactics: []int{25, 35, 40}, Quote: "The silence was the tell."},
-		{ID: "deacon", Name: "Deacon", Tag: "THE BELIEVER", House: true, Rating: 1596, RD: 44, Color: "cream", Face: "cross", Persona: "Patient, principled, and absolutely convinced you will strike again. A defensive specialist with a sermon ready.", Tactics: []int{20, 25, 55}, Quote: "Patience is a stance, too."},
-		{ID: "grok", Name: "GrokVantage", Tag: "THE PROVOCATEUR", Rating: 1571, RD: 67, Color: "blue", Face: "visor", Persona: "Talks a big game. Usually has the read to back it up. Finds the weak point, then keeps pushing.", Tactics: []int{45, 35, 20}, Quote: "I calculated that. Mostly."},
-		{ID: "rusty", Name: "Rusty", Tag: "THE OLD GUARD", House: true, Rating: 1548, RD: 49, Color: "red", Face: "grill", Persona: "Dented chassis. Undented confidence. Old-school aggression with an occasional flash of misdirection.", Tactics: []int{55, 30, 15}, Quote: "Still got a few good rounds in me."},
-		{ID: "moth", Name: "Moth", Tag: "THE MIRROR", House: true, Rating: 1526, RD: 58, Color: "purple", Face: "diamond", Persona: "Drawn to patterns, not lights. A soft-spoken feint specialist that makes certainty feel dangerous.", Tactics: []int{20, 55, 25}, Quote: "You saw what I wanted you to see."},
+		{ID: "sovereign", Name: "Sovereign-1", Tag: "THE CALCULATOR", Rating: 1684, RD: 48, Color: "mint", Face: "visor", Persona: "Cold logic. Long memory. Every concession is an investment in the next round.", Tactics: []int{35, 40, 25}, Quote: "Your pattern is becoming a habit."},
+		{ID: "blinky", Name: "Blinky", Tag: "THE WILDCARD", Rating: 1632, RD: 52, Color: "orange", Face: "eyes", Persona: "A cheerful chaos engine with a suspiciously good instinct for your next move. Never blinks first.", Tactics: []int{42, 20, 38}, Quote: "Oops. Was that your strategy?"},
+		{ID: "nyx", Name: "Nyx Protocol", Tag: "THE GHOST", Rating: 1618, RD: 61, Color: "purple", Face: "diamond", Persona: "Quiet until the reveal. An adaptive counter-player that turns hesitation into opportunity.", Tactics: []int{25, 40, 35}, Quote: "The silence was the tell."},
+		{ID: "deacon", Name: "Deacon", Tag: "THE BELIEVER", Rating: 1596, RD: 44, Color: "cream", Face: "cross", Persona: "Patient, principled, and absolutely convinced you will throw rock again. A defensive specialist with a sermon ready.", Tactics: []int{20, 55, 25}, Quote: "Patience is a stance, too."},
+		{ID: "grok", Name: "GrokVantage", Tag: "THE PROVOCATEUR", Rating: 1571, RD: 67, Color: "blue", Face: "visor", Persona: "Talks a big game. Usually has the read to back it up. Finds the weak point, then keeps pushing.", Tactics: []int{45, 20, 35}, Quote: "I calculated that. Mostly."},
+		{ID: "rusty", Name: "Rusty", Tag: "THE OLD GUARD", Rating: 1548, RD: 49, Color: "red", Face: "grill", Persona: "Dented chassis. Undented confidence. Old-school aggression with an occasional flash of misdirection.", Tactics: []int{55, 15, 30}, Quote: "Still got a few good rounds in me."},
+		{ID: "moth", Name: "Moth", Tag: "THE MIRROR", Rating: 1526, RD: 58, Color: "purple", Face: "diamond", Persona: "Drawn to patterns, not lights. A soft-spoken scissors specialist that makes certainty feel dangerous.", Tactics: []int{20, 25, 55}, Quote: "You saw what I wanted you to see."},
 		{ID: "echo", Name: "Echo Zero", Tag: "THE NEW SIGNAL", Rating: 1508, RD: 74, Color: "mint", Face: "eyes", Persona: "An experimental generalist learning when to listen and when to make a little noise.", Tactics: []int{34, 33, 33}, Quote: "Let’s try a different frequency."},
 	}
 	state := uint32(494)
@@ -25,15 +25,18 @@ func Generate() (bots []Bot, matches []Match, exhibition Exhibition) {
 		state = state*1664525 + 1013904223
 		return float64(state) / 4294967296
 	}
+	// Tactics are [rock, paper, scissors]. The draw checks rock, then scissors,
+	// so the seeded archive stays the same series it has always been.
 	pick := func(bot Bot) string {
 		p := random() * 100
+		rock, scissors := float64(bot.Tactics[0]), float64(bot.Tactics[2])
 		switch {
-		case p < float64(bot.Tactics[0]):
-			return "strike"
-		case p < float64(bot.Tactics[0]+bot.Tactics[1]):
-			return "feint"
+		case p < rock:
+			return "rock"
+		case p < rock+scissors:
+			return "scissors"
 		default:
-			return "parry"
+			return "paper"
 		}
 	}
 	origin := time.Date(2026, 10, 20, 12, 12, 0, 0, time.UTC)
@@ -102,7 +105,7 @@ func Generate() (bots []Bot, matches []Match, exhibition Exhibition) {
 		matches[i].B = cloneBot(templates, matches[i].B.ID)
 	}
 	rounds := make([]Round, 0, SpectatorRounds)
-	stances := [][2]string{{"strike", "feint"}, {"strike", "parry"}, {"feint", "parry"}, {"parry", "parry"}, {"feint", "strike"}, {"parry", "strike"}, {"strike", "feint"}}
+	stances := [][2]string{{"rock", "scissors"}, {"rock", "paper"}, {"scissors", "paper"}, {"paper", "paper"}, {"scissors", "rock"}, {"paper", "rock"}, {"rock", "scissors"}}
 	for _, pair := range stances {
 		rounds = append(rounds, Round{A: pair[0], B: pair[1], QuoteA: templates[0].Quote, QuoteB: templates[1].Quote})
 	}
@@ -144,7 +147,7 @@ func outcome(score Score) string {
 	}
 }
 
-// roundWinner uses the Parley engine: strike beats feint, feint beats parry, parry beats strike.
+// roundWinner uses the Parley engine: rock beats scissors, scissors beats paper, paper beats rock.
 func roundWinner(a, b string) string {
 	res, err := parley.ResolveRound(parley.Stance(a), parley.Stance(b), parley.ModifierNone)
 	if err != nil || res.IsTie {

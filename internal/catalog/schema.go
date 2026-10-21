@@ -1,9 +1,10 @@
 package catalog
 
 // spectatorDDL is the archive schema for SQLite. Postgres applies the same
-// tables from migrations/00006_spectator_archive.sql. These statements must
-// stay aligned with that migration: text ids, integer flags, text timestamps,
-// and text JSON, with no ledger columns.
+// tables from migrations/00006_spectator_archive.sql and
+// 00007_rock_paper_scissors.sql. These statements must stay aligned with those
+// migrations: text ids, integer flags, text timestamps, and text JSON, with no
+// ledger columns.
 var spectatorDDL = []string{
 	`CREATE TABLE IF NOT EXISTS spectator_bots (
 		id TEXT PRIMARY KEY,
@@ -18,9 +19,9 @@ var spectatorDDL = []string{
 		quote TEXT NOT NULL DEFAULT '',
 		color TEXT NOT NULL DEFAULT 'mint',
 		face TEXT NOT NULL DEFAULT 'visor',
-		tactic_strike INTEGER NOT NULL DEFAULT 34,
-		tactic_feint INTEGER NOT NULL DEFAULT 33,
-		tactic_parry INTEGER NOT NULL DEFAULT 33,
+		tactic_rock INTEGER NOT NULL DEFAULT 34,
+		tactic_paper INTEGER NOT NULL DEFAULT 33,
+		tactic_scissors INTEGER NOT NULL DEFAULT 33,
 		created_at TEXT NOT NULL DEFAULT ''
 	)`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS spectator_bots_slug_key ON spectator_bots (slug)`,
@@ -58,4 +59,20 @@ var spectatorDDL = []string{
 		stake INTEGER NOT NULL,
 		rounds TEXT NOT NULL
 	)`,
+}
+
+// legacyStanceColumn marks a SQLite archive created before 00007.
+const legacyStanceColumn = "tactic_strike"
+
+// legacyStanceUpgrade is the SQLite half of 00007: the old stance names map one
+// to one (strike = rock, feint = scissors, parry = paper), so results stand.
+var legacyStanceUpgrade = []string{
+	`ALTER TABLE spectator_bots RENAME COLUMN tactic_strike TO tactic_rock`,
+	`ALTER TABLE spectator_bots RENAME COLUMN tactic_parry TO tactic_paper`,
+	`ALTER TABLE spectator_bots RENAME COLUMN tactic_feint TO tactic_scissors`,
+	`UPDATE spectator_rounds SET
+		p1_stance = CASE p1_stance WHEN 'strike' THEN 'rock' WHEN 'parry' THEN 'paper' WHEN 'feint' THEN 'scissors' ELSE p1_stance END,
+		p2_stance = CASE p2_stance WHEN 'strike' THEN 'rock' WHEN 'parry' THEN 'paper' WHEN 'feint' THEN 'scissors' ELSE p2_stance END`,
+	`UPDATE spectator_exhibition SET rounds =
+		replace(replace(replace(rounds, '"strike"', '"rock"'), '"parry"', '"paper"'), '"feint"', '"scissors"')`,
 }

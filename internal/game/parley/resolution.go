@@ -18,23 +18,23 @@ type RoundResolution struct {
 	Winner          PlayerID `json:"winner"`            // Empty if tie
 	MirrorPenP1     int      `json:"mirror_penalty_p1"` // Marbles penalized to house if MirrorTiePenalty active
 	MirrorPenP2     int      `json:"mirror_penalty_p2"`
-	P1HistoryReveal bool     `json:"p1_history_reveal"` // True if ParryRebound triggered for P1
-	P2HistoryReveal bool     `json:"p2_history_reveal"` // True if ParryRebound triggered for P2
+	P1HistoryReveal bool     `json:"p1_history_reveal"` // True if PaperRebound triggered for P1
+	P2HistoryReveal bool     `json:"p2_history_reveal"` // True if PaperRebound triggered for P2
 }
 
 // ResolveRound evaluates two committed stances under an optional active modifier card.
 // Resolution matrix:
 //
-//	Strike beats Feint (+1 pt)
-//	Feint beats Parry (+1 pt)
-//	Parry beats Strike (+1 pt)
+//	Rock beats Scissors (+1 pt)
+//	Scissors beats Paper (+1 pt)
+//	Paper beats Rock (+1 pt)
 //	Ties: 0 pts unless modified
 //
 // Modifiers:
 //
-//	FeintSurge: Successful Feint awards +2 pts instead of +1.
+//	ScissorsSurge: A round won with Scissors awards +2 pts instead of +1.
 //	MirrorTiePenalty: Ties penalize both contestants 1 marble into house pot.
-//	ParryRebound: Successful Parry triggers history reveal.
+//	PaperRebound: A round won with Paper triggers history reveal.
 func ResolveRound(p1Stance, p2Stance Stance, card ModifierCard) (RoundResolution, error) {
 	if !p1Stance.IsValid() || !p2Stance.IsValid() {
 		return RoundResolution{}, ErrInvalidStance
@@ -60,35 +60,35 @@ func ResolveRound(p1Stance, p2Stance Stance, card ModifierCard) (RoundResolution
 
 	p1Wins := false
 	switch p1Stance {
-	case StanceStrike:
-		// Strike beats Feint; loses to Parry
-		p1Wins = (p2Stance == StanceFeint)
-	case StanceParry:
-		// Parry beats Strike; loses to Feint
-		p1Wins = (p2Stance == StanceStrike)
-	case StanceFeint:
-		// Feint beats Parry; loses to Strike
-		p1Wins = (p2Stance == StanceParry)
+	case StanceRock:
+		// Rock beats Scissors; loses to Paper
+		p1Wins = (p2Stance == StanceScissors)
+	case StancePaper:
+		// Paper beats Rock; loses to Scissors
+		p1Wins = (p2Stance == StanceRock)
+	case StanceScissors:
+		// Scissors beats Paper; loses to Rock
+		p1Wins = (p2Stance == StancePaper)
 	}
 
 	if p1Wins {
 		res.Winner = Player1
 		points := 1
-		if p1Stance == StanceFeint && card == ModifierFeintSurge {
+		if p1Stance == StanceScissors && card == ModifierScissorsSurge {
 			points = 2
 		}
 		res.P1Points = points
-		if p1Stance == StanceParry && card == ModifierParryRebound {
+		if p1Stance == StancePaper && card == ModifierPaperRebound {
 			res.P1HistoryReveal = true
 		}
 	} else {
 		res.Winner = Player2
 		points := 1
-		if p2Stance == StanceFeint && card == ModifierFeintSurge {
+		if p2Stance == StanceScissors && card == ModifierScissorsSurge {
 			points = 2
 		}
 		res.P2Points = points
-		if p2Stance == StanceParry && card == ModifierParryRebound {
+		if p2Stance == StancePaper && card == ModifierPaperRebound {
 			res.P2HistoryReveal = true
 		}
 	}

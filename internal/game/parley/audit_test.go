@@ -12,11 +12,11 @@ import (
 
 func TestAuditCommitmentsAreImmutable(t *testing.T) {
 	m := NewMatch("immutable", DefaultConfig())
-	if err := m.CommitTurn(Player1, StanceStrike, "first", 0); err != nil {
+	if err := m.CommitTurn(Player1, StanceRock, "first", 0); err != nil {
 		t.Fatal(err)
 	}
 	before := *m
-	if err := m.CommitTurn(Player1, StanceParry, "replacement", 0); err == nil {
+	if err := m.CommitTurn(Player1, StancePaper, "replacement", 0); err == nil {
 		t.Fatal("duplicate commitment accepted")
 	}
 	if !reflect.DeepEqual(before, *m) {
@@ -27,7 +27,7 @@ func TestAuditCommitmentsAreImmutable(t *testing.T) {
 func TestAuditPlayRoundIsAtomic(t *testing.T) {
 	m := NewMatch("atomic", DefaultConfig())
 	before := *m
-	if _, err := m.PlayRound(StanceStrike, Stance("invalid"), "", ""); err == nil {
+	if _, err := m.PlayRound(StanceRock, Stance("invalid"), "", ""); err == nil {
 		t.Fatal("invalid stance accepted")
 	}
 	if !reflect.DeepEqual(before, *m) {
@@ -37,13 +37,13 @@ func TestAuditPlayRoundIsAtomic(t *testing.T) {
 
 func TestAuditZeroPurseCannotWager(t *testing.T) {
 	m := NewMatch("broke", DefaultConfig())
-	if err := m.CommitTurn(Player1, StanceStrike, "", 1); err != ErrExcessiveWager {
+	if err := m.CommitTurn(Player1, StanceRock, "", 1); err != ErrExcessiveWager {
 		t.Fatalf("got %v", err)
 	}
 }
 
 func TestAuditInvalidModifierRejected(t *testing.T) {
-	if _, err := ResolveRound(StanceStrike, StanceStrike, ModifierCard("invalid")); err != ErrInvalidModifier {
+	if _, err := ResolveRound(StanceRock, StanceRock, ModifierCard("invalid")); err != ErrInvalidModifier {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -116,7 +116,7 @@ func BenchmarkSanitizeBanter(b *testing.B) {
 func BenchmarkResolveRound(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
-		_, _ = ResolveRound(StanceFeint, StanceParry, ModifierFeintSurge)
+		_, _ = ResolveRound(StanceScissors, StancePaper, ModifierScissorsSurge)
 	}
 }
 func BenchmarkMatch(b *testing.B) {
@@ -124,7 +124,7 @@ func BenchmarkMatch(b *testing.B) {
 	for b.Loop() {
 		m := NewMatch("bench", DefaultConfig())
 		for m.Status != StatusCompleted {
-			_, _ = m.PlayRound(StanceStrike, StanceFeint, "Good game", "")
+			_, _ = m.PlayRound(StanceRock, StanceScissors, "Good game", "")
 		}
 	}
 }
@@ -137,12 +137,12 @@ func TestAuditRejectedTurnsDoNotMutateState(t *testing.T) {
 		wager  int
 		cfg    MatchConfig
 	}{
-		{"unknown player", PlayerID("P3"), StanceStrike, 0, DefaultConfig()},
+		{"unknown player", PlayerID("P3"), StanceRock, 0, DefaultConfig()},
 		{"invalid stance", Player1, StanceNone, 0, DefaultConfig()},
-		{"negative wager", Player1, StanceStrike, -1, DefaultConfig()},
-		{"huge rounds", Player1, StanceStrike, 0, MatchConfig{MaxRounds: math.MaxInt}},
-		{"invalid card", Player1, StanceStrike, 0, MatchConfig{ModifierCard: "bad"}},
-		{"negative purse", Player1, StanceStrike, 0, MatchConfig{P1Purse: -1}},
+		{"negative wager", Player1, StanceRock, -1, DefaultConfig()},
+		{"huge rounds", Player1, StanceRock, 0, MatchConfig{MaxRounds: math.MaxInt}},
+		{"invalid card", Player1, StanceRock, 0, MatchConfig{ModifierCard: "bad"}},
+		{"negative purse", Player1, StanceRock, 0, MatchConfig{P1Purse: -1}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m := NewMatch("reject", tc.cfg)
@@ -162,23 +162,23 @@ func TestAuditRoundOneWagersAreFrozen(t *testing.T) {
 	cfg.P1Purse = 10
 	cfg.P2Purse = 20
 	m := NewMatch("wagers", cfg)
-	if err := m.CommitTurn(Player1, StanceStrike, "", 10); err != nil {
+	if err := m.CommitTurn(Player1, StanceRock, "", 10); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.CommitTurn(Player2, StanceStrike, "", 20); err != nil {
+	if err := m.CommitTurn(Player2, StanceRock, "", 20); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.CommitTurn(Player1, StanceStrike, "", 9); err != ErrInvalidWagerRound {
+	if err := m.CommitTurn(Player1, StanceRock, "", 9); err != ErrInvalidWagerRound {
 		t.Fatalf("got %v", err)
 	}
 	// API clients can omit their wager after round one; the helper can repeat it.
-	if err := m.CommitTurn(Player1, StanceStrike, "", 0); err != nil {
+	if err := m.CommitTurn(Player1, StanceRock, "", 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.PlayRound(StanceStrike, StanceFeint, "", ""); err != ErrRoundNotPending {
+	if _, err := m.PlayRound(StanceRock, StanceScissors, "", ""); err != ErrRoundNotPending {
 		t.Fatalf("mixed pending helper: %v", err)
 	}
-	if err := m.CommitTurn(Player2, StanceFeint, "", 20); err != nil {
+	if err := m.CommitTurn(Player2, StanceScissors, "", 20); err != nil {
 		t.Fatal(err)
 	}
 	if m.Config.P1SideBet != 10 || m.Config.P2SideBet != 20 {
@@ -194,7 +194,7 @@ func TestAuditFiniteSuddenDeathDrawAndSettlement(t *testing.T) {
 		t.Fatal("unplayed round is not resolved")
 	}
 	for range cfg.MaxRounds + MaxSuddenDeathRounds {
-		if _, err := m.PlayRound(StanceStrike, StanceStrike, "", ""); err != nil {
+		if _, err := m.PlayRound(StanceRock, StanceRock, "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -208,7 +208,7 @@ func TestAuditFiniteSuddenDeathDrawAndSettlement(t *testing.T) {
 	if p1.NetMarbleDelta != -8 || p2.NetMarbleDelta != -8 {
 		t.Fatalf("wrong draw accounting: %+v %+v", p1, p2)
 	}
-	if _, err := m.PlayRound(StanceStrike, StanceFeint, "", ""); err != ErrMatchOver {
+	if _, err := m.PlayRound(StanceRock, StanceScissors, "", ""); err != ErrMatchOver {
 		t.Fatal(err)
 	}
 }
@@ -218,7 +218,7 @@ func TestAuditPlayRoundInvalidSecondWagerIsAtomic(t *testing.T) {
 	cfg.P2SideBet = 1
 	m := NewMatch("atomic wager", cfg)
 	before := *m
-	if _, err := m.PlayRound(StanceStrike, StanceParry, "", ""); err != ErrExcessiveWager {
+	if _, err := m.PlayRound(StanceRock, StancePaper, "", ""); err != ErrExcessiveWager {
 		t.Fatalf("got %v", err)
 	}
 	if !reflect.DeepEqual(before, *m) {
@@ -273,17 +273,17 @@ func FuzzBanterQuarantine(f *testing.F) {
 }
 
 func TestAuditRegulationAndSuddenDeathWinners(t *testing.T) {
-	for _, card := range []ModifierCard{ModifierNone, ModifierMirrorTiePenalty, ModifierFeintSurge, ModifierParryRebound} {
+	for _, card := range []ModifierCard{ModifierNone, ModifierMirrorTiePenalty, ModifierScissorsSurge, ModifierPaperRebound} {
 		t.Run(string(card), func(t *testing.T) {
 			cfg := DefaultConfig()
 			cfg.ModifierCard = card
 			m := NewMatch("regulation lead", cfg)
 			for range 4 {
-				if _, err := m.PlayRound(StanceStrike, StanceStrike, "", ""); err != nil {
+				if _, err := m.PlayRound(StanceRock, StanceRock, "", ""); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if _, err := m.PlayRound(StanceFeint, StanceParry, "", ""); err != nil {
+			if _, err := m.PlayRound(StanceScissors, StancePaper, "", ""); err != nil {
 				t.Fatal(err)
 			}
 			if m.Status != StatusCompleted || m.Winner != Player1 {
@@ -291,11 +291,11 @@ func TestAuditRegulationAndSuddenDeathWinners(t *testing.T) {
 			}
 			m = NewMatch("sudden death winner", cfg)
 			for range 7 {
-				if _, err := m.PlayRound(StanceStrike, StanceStrike, "", ""); err != nil {
+				if _, err := m.PlayRound(StanceRock, StanceRock, "", ""); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if _, err := m.PlayRound(StanceParry, StanceFeint, "", ""); err != nil {
+			if _, err := m.PlayRound(StancePaper, StanceScissors, "", ""); err != nil {
 				t.Fatal(err)
 			}
 			if m.Status != StatusCompleted || m.Winner != Player2 || !m.Rounds[7].IsSuddenDeath {
@@ -312,13 +312,12 @@ func BenchmarkQuarantineTag(b *testing.B) {
 	}
 }
 func BenchmarkHouseBots(b *testing.B) {
-	history := []Round{{P1Stance: StanceStrike, P2Stance: StanceFeint}}
-	for _, bot := range []HouseBot{NewBlinky(), NewRusty(), NewDeacon()} {
+	history := []Round{{P1Stance: StanceRock, P2Stance: StanceScissors}}
+	for _, bot := range []HouseBot{NewWeighted("Rock", 50, 25, 25, 3), NewWeighted("Paper", 20, 50, 30, 9)} {
 		b.Run(bot.Name(), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				bot.SelectStance(history, Player2)
-				bot.SelectBanter(history, Player2)
 			}
 		})
 	}

@@ -49,5 +49,26 @@ func (s *SQLite) EnsureSchema(ctx context.Context) error {
 			return err
 		}
 	}
-	return nil
+	return s.upgradeLegacyStances(ctx)
+}
+
+func (s *SQLite) upgradeLegacyStances(ctx context.Context) error {
+	var legacy int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info('spectator_bots') WHERE name = ?`, legacyStanceColumn).Scan(&legacy); err != nil {
+		return err
+	}
+	if legacy == 0 {
+		return nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, statement := range legacyStanceUpgrade {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

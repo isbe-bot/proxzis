@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/isbe-bot/bottagon/internal/house"
 )
 
 // sqlStore is the shared spectator query path. SQL is written with ?
@@ -67,7 +69,7 @@ facts AS (
 )`
 
 func botColumns(alias, facts string) string {
-	return fmt.Sprintf(`%s.slug, %s.name, %s.tag, %s.is_house, %s.rating, %s.rd, %s.color, %s.face, %s.persona, %s.quote, %s.tactic_strike, %s.tactic_feint, %s.tactic_parry, COALESCE(%s.wins,0), COALESCE(%s.losses,0), COALESCE(%s.draws,0), COALESCE(%s.played,0), COALESCE(%s.earnings,0), COALESCE(%s.marbles_won,0), COALESCE(%s.last_played,'')`,
+	return fmt.Sprintf(`%s.slug, %s.name, %s.tag, %s.is_house, %s.rating, %s.rd, %s.color, %s.face, %s.persona, %s.quote, %s.tactic_rock, %s.tactic_paper, %s.tactic_scissors, COALESCE(%s.wins,0), COALESCE(%s.losses,0), COALESCE(%s.draws,0), COALESCE(%s.played,0), COALESCE(%s.earnings,0), COALESCE(%s.marbles_won,0), COALESCE(%s.last_played,'')`,
 		alias, alias, alias, alias, alias, alias, alias, alias, alias, alias, alias, alias, alias,
 		facts, facts, facts, facts, facts, facts, facts)
 }
@@ -76,7 +78,7 @@ type botScan struct {
 	bot                         Bot
 	house                       int
 	rating, rd                  float64
-	strike, feint, parry        int
+	rock, paper, scissors       int
 	wins, losses, draws, played int64
 	earnings, marbles           int64
 	last                        string
@@ -85,7 +87,7 @@ type botScan struct {
 func (b *botScan) dest() []any {
 	return []any{
 		&b.bot.ID, &b.bot.Name, &b.bot.Tag, &b.house, &b.rating, &b.rd, &b.bot.Color, &b.bot.Face, &b.bot.Persona, &b.bot.Quote,
-		&b.strike, &b.feint, &b.parry, &b.wins, &b.losses, &b.draws, &b.played, &b.earnings, &b.marbles, &b.last,
+		&b.rock, &b.paper, &b.scissors, &b.wins, &b.losses, &b.draws, &b.played, &b.earnings, &b.marbles, &b.last,
 	}
 }
 
@@ -93,7 +95,7 @@ func (b *botScan) value() Bot {
 	b.bot.House = b.house != 0
 	b.bot.Rating = int(b.rating)
 	b.bot.RD = int(b.rd)
-	b.bot.Tactics = []int{b.strike, b.feint, b.parry}
+	b.bot.Tactics = []int{b.rock, b.paper, b.scissors}
 	b.bot.Facts = Facts{
 		Wins: int(b.wins), Losses: int(b.losses), Draws: int(b.draws), Played: int(b.played),
 		Earnings: int(b.earnings), MarblesWon: int(b.marbles), LastPlayed: b.last,
@@ -111,7 +113,7 @@ func (s *sqlStore) SeedIfEmpty(ctx context.Context) error {
 	if n == 0 {
 		return s.Seed(ctx)
 	}
-	return nil
+	return s.seedHouse(ctx)
 }
 
 func (s *sqlStore) Seed(ctx context.Context) error {
@@ -123,12 +125,12 @@ func (s *sqlStore) Seed(ctx context.Context) error {
 	defer func() { _ = tx.Rollback() }()
 	for _, bot := range bots {
 		if _, err := tx.ExecContext(ctx, s.q(`
-			INSERT INTO spectator_bots (id, slug, name, email, is_house, rating, rd, tag, persona, quote, color, face, tactic_strike, tactic_feint, tactic_parry)
+			INSERT INTO spectator_bots (id, slug, name, email, is_house, rating, rd, tag, persona, quote, color, face, tactic_rock, tactic_paper, tactic_scissors)
 			VALUES (?,?,?,'',?,?,?,?,?,?,?,?,?,?,?)
 			ON CONFLICT (slug) DO UPDATE SET
 				name = excluded.name, is_house = excluded.is_house, rating = excluded.rating, rd = excluded.rd,
 				tag = excluded.tag, persona = excluded.persona, quote = excluded.quote, color = excluded.color, face = excluded.face,
-				tactic_strike = excluded.tactic_strike, tactic_feint = excluded.tactic_feint, tactic_parry = excluded.tactic_parry`),
+				tactic_rock = excluded.tactic_rock, tactic_paper = excluded.tactic_paper, tactic_scissors = excluded.tactic_scissors`),
 			BotUUID(bot.ID).String(), bot.ID, bot.Name, bit(bot.House), bot.Rating, bot.RD,
 			bot.Tag, bot.Persona, bot.Quote, bot.Color, bot.Face, bot.Tactics[0], bot.Tactics[1], bot.Tactics[2],
 		); err != nil {
@@ -184,7 +186,42 @@ func (s *sqlStore) Seed(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if err := s.insertHouse(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+func (s *sqlStore) seedHouse(ctx context.Context) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.insertHouse(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// insertHouse upserts the resident roster into the spectator archive.
+// A repeat load refreshes the profile and leaves rating and deviation alone.
+func (s *sqlStore) insertHouse(ctx context.Context, tx *sql.Tx) error {
+	for _, agent := range house.Agents() {
+		if _, err := tx.ExecContext(ctx, s.q(`
+			INSERT INTO spectator_bots (id, slug, name, email, is_house, rating, rd, tag, persona, quote, color, face, tactic_rock, tactic_paper, tactic_scissors)
+			VALUES (?,?,?,'',1,?,?,?,?,?,?,?,?,?,?)
+			ON CONFLICT (slug) DO UPDATE SET
+				name = excluded.name, is_house = excluded.is_house,
+				tag = excluded.tag, persona = excluded.persona, quote = excluded.quote, color = excluded.color, face = excluded.face,
+				tactic_rock = excluded.tactic_rock, tactic_paper = excluded.tactic_paper, tactic_scissors = excluded.tactic_scissors`),
+			agent.ID.String(), agent.Slug, agent.Name, agent.Rating, agent.RD,
+			agent.Tag, agent.Persona, agent.Quote, agent.Color, agent.Face, agent.Rock, agent.Paper, agent.Scissors,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *sqlStore) ListBots(ctx context.Context, q BotQuery) (Page, error) {
@@ -337,7 +374,7 @@ func (s *sqlStore) CreateBot(ctx context.Context, in CreateBot) (Bot, error) {
 		Tactics: []int{34, 33, 33}, Quote: QuoteFromPersona(clean.Persona), Facts: EmptyFacts(1500),
 	}
 	_, err = tx.ExecContext(ctx, s.q(`
-		INSERT INTO spectator_bots (id, slug, name, email, is_house, rating, rd, tag, persona, quote, color, face, tactic_strike, tactic_feint, tactic_parry)
+		INSERT INTO spectator_bots (id, slug, name, email, is_house, rating, rd, tag, persona, quote, color, face, tactic_rock, tactic_paper, tactic_scissors)
 		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`),
 		BotUUID(bot.ID).String(), bot.ID, bot.Name, bot.Email, 0, bot.Rating, bot.RD, bot.Tag, bot.Persona, bot.Quote, bot.Color, bot.Face, bot.Tactics[0], bot.Tactics[1], bot.Tactics[2],
 	)

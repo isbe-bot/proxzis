@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"github.com/isbe-bot/bottagon/internal/api/http"
 	"github.com/isbe-bot/bottagon/internal/catalog"
 	"github.com/isbe-bot/bottagon/internal/config"
+	"github.com/isbe-bot/bottagon/internal/house"
 	"github.com/isbe-bot/bottagon/internal/matchmaker"
 	"github.com/isbe-bot/bottagon/internal/obs"
 )
@@ -95,6 +97,11 @@ func openCatalog(cfg *config.Config, logger *slog.Logger) catalog.Store {
 		return nil
 	}
 	if catalog.PostgresURL(cfg.DatabaseURL) {
+		if err := house.SeedLedger(ctx, closer.(*sql.DB)); err != nil {
+			logger.Error("house ledger seed failed", slog.Any("error", err))
+			_ = closer.Close()
+			return nil
+		}
 		logger.Info("spectator archive ready", slog.String("driver", "postgres"))
 	} else {
 		logger.Info("spectator archive ready", slog.String("driver", "sqlite"), slog.String("path", cfg.DatabasePath))

@@ -6,8 +6,8 @@ import (
 
 func FuzzParleyRoundResolution(f *testing.F) {
 	// Seed corpus with canonical stance pairs and modifiers
-	stances := []string{"strike", "parry", "feint", "STRIKE", "PARRY", "FEINT", "", "invalid", "foo"}
-	modifiers := []string{"", "MirrorTiePenalty", "FeintSurge", "ParryRebound", "invalid_mod"}
+	stances := []string{"rock", "paper", "scissors", "ROCK", "PAPER", "SCISSORS", "", "invalid", "foo"}
+	modifiers := []string{"", "MirrorTiePenalty", "ScissorsSurge", "PaperRebound", "invalid_mod"}
 
 	for _, s1 := range stances {
 		for _, s2 := range stances {
@@ -62,12 +62,12 @@ func FuzzParleyRoundResolution(f *testing.F) {
 		}
 
 		// Mod sanity check
-		if errMod == nil && mod == ModifierFeintSurge {
-			if res.Winner == Player1 && s1 == StanceFeint && res.P1Points != 2 {
-				t.Errorf("FeintSurge must award 2 pts to P1 feint win")
+		if errMod == nil && mod == ModifierScissorsSurge {
+			if res.Winner == Player1 && s1 == StanceScissors && res.P1Points != 2 {
+				t.Errorf("ScissorsSurge must award 2 pts to P1 scissors win")
 			}
-			if res.Winner == Player2 && s2 == StanceFeint && res.P2Points != 2 {
-				t.Errorf("FeintSurge must award 2 pts to P2 feint win")
+			if res.Winner == Player2 && s2 == StanceScissors && res.P2Points != 2 {
+				t.Errorf("ScissorsSurge must award 2 pts to P2 scissors win")
 			}
 		}
 	})

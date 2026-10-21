@@ -74,7 +74,7 @@ func TestStress_50ConcurrentBots(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	stances := []string{"strike", "parry", "feint"}
+	stances := []string{"rock", "paper", "scissors"}
 
 	for i := 0; i < numBots; i++ {
 		wg.Add(1)

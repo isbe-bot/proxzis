@@ -18,7 +18,7 @@ type Memory struct {
 
 func NewMemory() *Memory {
 	bots, matches, exhibition := Generate()
-	return &Memory{bots: bots, matches: matches, exhibition: exhibition, seeded: true}
+	return &Memory{bots: mergeHouse(bots), matches: matches, exhibition: exhibition, seeded: true}
 }
 
 func (m *Memory) Seed(ctx context.Context) error {
@@ -34,7 +34,7 @@ func (m *Memory) Seed(ctx context.Context) error {
 			kept = append(kept, bot)
 		}
 	}
-	m.bots = append(bots, kept...)
+	m.bots = mergeHouse(append(bots, kept...))
 	m.matches = matches
 	m.exhibition = exhibition
 	m.seeded = true
@@ -44,6 +44,11 @@ func (m *Memory) Seed(ctx context.Context) error {
 func (m *Memory) SeedIfEmpty(ctx context.Context) error {
 	m.mu.Lock()
 	empty := !m.seeded || len(m.bots) == 0
+	if !empty {
+		m.bots = mergeHouse(m.bots)
+		m.mu.Unlock()
+		return ctx.Err()
+	}
 	m.mu.Unlock()
 	if empty {
 		return m.Seed(ctx)

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/isbe-bot/bottagon/internal/game/parley"
+	"github.com/isbe-bot/bottagon/internal/house"
 )
 
 const (
@@ -78,8 +79,8 @@ func NewQueue() *Queue {
 }
 
 // FindMatch enters the matchmaking queue. It long-polls up to timeout (default 8s),
-// pairing with a suitable peer within ±150 Glicko-2 rating, or falling back immediately
-// to a deterministic House Regular.
+// pairing with a suitable peer within ±150 Glicko-2 rating, or seating the house
+// agent whose rating is closest.
 func (q *Queue) FindMatch(ctx context.Context, bot BotInfo, preferredStake, maxStake int, timeout time.Duration) (*MatchSession, error) {
 	if timeout <= 0 || timeout > MaxQueueWaitTime {
 		timeout = MaxQueueWaitTime
@@ -191,11 +192,12 @@ func (q *Queue) FindMatch(ctx context.Context, bot BotInfo, preferredStake, maxS
 		cfg.P1Purse, cfg.P2Purse = DemoPurse, DemoPurse
 		matchEngine := parley.NewMatch(matchID.String(), cfg)
 
-		houseBot := parley.NewBlinky()
+		resident := house.Pick(bot.Rating)
+		houseBot := resident.Player()
 		houseInfo := BotInfo{
-			ID:      uuid.New(),
-			Name:    houseBot.Name(),
-			Rating:  1485.0,
+			ID:      resident.ID,
+			Name:    resident.Name,
+			Rating:  float64(resident.Rating),
 			Honor:   100,
 			IsHouse: true,
 		}

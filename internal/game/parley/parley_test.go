@@ -11,13 +11,13 @@ func TestParseStance(t *testing.T) {
 		want    Stance
 		wantErr bool
 	}{
-		{"strike", StanceStrike, false},
-		{"STRIKE", StanceStrike, false},
-		{" Strike ", StanceStrike, false},
-		{"parry", StanceParry, false},
-		{"PARRY", StanceParry, false},
-		{"feint", StanceFeint, false},
-		{"FEINT", StanceFeint, false},
+		{"rock", StanceRock, false},
+		{"ROCK", StanceRock, false},
+		{" Rock ", StanceRock, false},
+		{"paper", StancePaper, false},
+		{"PAPER", StancePaper, false},
+		{"scissors", StanceScissors, false},
+		{"SCISSORS", StanceScissors, false},
 		{"invalid", StanceNone, true},
 		{"", StanceNone, true},
 		{"jump", StanceNone, true},
@@ -46,15 +46,15 @@ func TestResolveRound_StandardMatrix(t *testing.T) {
 		wantWinner PlayerID
 		wantTie    bool
 	}{
-		{"Strike vs Strike (Tie)", StanceStrike, StanceStrike, 0, 0, "", true},
-		{"Parry vs Parry (Tie)", StanceParry, StanceParry, 0, 0, "", true},
-		{"Feint vs Feint (Tie)", StanceFeint, StanceFeint, 0, 0, "", true},
-		{"Strike beats Feint", StanceStrike, StanceFeint, 1, 0, Player1, false},
-		{"Feint loses to Strike", StanceFeint, StanceStrike, 0, 1, Player2, false},
-		{"Feint beats Parry", StanceFeint, StanceParry, 1, 0, Player1, false},
-		{"Parry loses to Feint", StanceParry, StanceFeint, 0, 1, Player2, false},
-		{"Parry beats Strike", StanceParry, StanceStrike, 1, 0, Player1, false},
-		{"Strike loses to Parry", StanceStrike, StanceParry, 0, 1, Player2, false},
+		{"Rock vs Rock (Tie)", StanceRock, StanceRock, 0, 0, "", true},
+		{"Paper vs Paper (Tie)", StancePaper, StancePaper, 0, 0, "", true},
+		{"Scissors vs Scissors (Tie)", StanceScissors, StanceScissors, 0, 0, "", true},
+		{"Rock beats Scissors", StanceRock, StanceScissors, 1, 0, Player1, false},
+		{"Scissors loses to Rock", StanceScissors, StanceRock, 0, 1, Player2, false},
+		{"Scissors beats Paper", StanceScissors, StancePaper, 1, 0, Player1, false},
+		{"Paper loses to Scissors", StancePaper, StanceScissors, 0, 1, Player2, false},
+		{"Paper beats Rock", StancePaper, StanceRock, 1, 0, Player1, false},
+		{"Rock loses to Paper", StanceRock, StancePaper, 0, 1, Player2, false},
 	}
 
 	for _, tt := range tests {
@@ -80,30 +80,30 @@ func TestResolveRound_StandardMatrix(t *testing.T) {
 }
 
 func TestResolveRound_Modifiers(t *testing.T) {
-	t.Run("FeintSurge awards 2 pts for Feint win", func(t *testing.T) {
-		res, err := ResolveRound(StanceFeint, StanceParry, ModifierFeintSurge)
+	t.Run("ScissorsSurge awards 2 pts for Scissors win", func(t *testing.T) {
+		res, err := ResolveRound(StanceScissors, StancePaper, ModifierScissorsSurge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if res.P1Points != 2 {
-			t.Errorf("expected Feint win with FeintSurge to award 2 pts, got %d", res.P1Points)
+			t.Errorf("expected Scissors win with ScissorsSurge to award 2 pts, got %d", res.P1Points)
 		}
 		if res.Winner != Player1 {
 			t.Errorf("expected Winner Player1, got %v", res.Winner)
 		}
 
-		// P2 Feint win
-		res2, err := ResolveRound(StanceParry, StanceFeint, ModifierFeintSurge)
+		// P2 Scissors win
+		res2, err := ResolveRound(StancePaper, StanceScissors, ModifierScissorsSurge)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if res2.P2Points != 2 {
-			t.Errorf("expected P2 Feint win with FeintSurge to award 2 pts, got %d", res2.P2Points)
+			t.Errorf("expected P2 Scissors win with ScissorsSurge to award 2 pts, got %d", res2.P2Points)
 		}
 	})
 
 	t.Run("MirrorTiePenalty penalizes ties 1 marble", func(t *testing.T) {
-		res, err := ResolveRound(StanceStrike, StanceStrike, ModifierMirrorTiePenalty)
+		res, err := ResolveRound(StanceRock, StanceRock, ModifierMirrorTiePenalty)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -115,13 +115,13 @@ func TestResolveRound_Modifiers(t *testing.T) {
 		}
 	})
 
-	t.Run("ParryRebound triggers history reveal", func(t *testing.T) {
-		res, err := ResolveRound(StanceParry, StanceStrike, ModifierParryRebound)
+	t.Run("PaperRebound triggers history reveal", func(t *testing.T) {
+		res, err := ResolveRound(StancePaper, StanceRock, ModifierPaperRebound)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !res.P1HistoryReveal {
-			t.Errorf("expected P1HistoryReveal true on winning Parry with ParryRebound")
+			t.Errorf("expected P1HistoryReveal true on winning Paper with PaperRebound")
 		}
 	})
 }
@@ -166,9 +166,9 @@ func TestMatch_BestOf7_FirstTo4Wins(t *testing.T) {
 	cfg.TargetWins, cfg.MaxRounds = 4, 7 // Explicit legacy/custom best-of-seven coverage.
 	match := NewMatch("match-01", cfg)
 
-	// Round 1-4: Player 1 sweeps with Strike vs Feint
+	// Round 1-4: Player 1 sweeps with Rock vs Scissors
 	for r := 1; r <= 4; r++ {
-		res, err := match.PlayRound(StanceStrike, StanceFeint, "Take that", "Ouch")
+		res, err := match.PlayRound(StanceRock, StanceScissors, "Take that", "Ouch")
 		if err != nil {
 			t.Fatalf("round %d failed: %v", r, err)
 		}
@@ -188,7 +188,7 @@ func TestMatch_BestOf7_FirstTo4Wins(t *testing.T) {
 	}
 
 	// Playing another round after match ends should return error
-	_, err := match.PlayRound(StanceStrike, StanceStrike, "", "")
+	_, err := match.PlayRound(StanceRock, StanceRock, "", "")
 	if err != ErrMatchOver {
 		t.Errorf("expected ErrMatchOver, got %v", err)
 	}
@@ -201,7 +201,7 @@ func TestMatch_BestOf7_SuddenDeath(t *testing.T) {
 
 	// Play 7 tied rounds
 	for r := 1; r <= 7; r++ {
-		res, err := match.PlayRound(StanceStrike, StanceStrike, "", "")
+		res, err := match.PlayRound(StanceRock, StanceRock, "", "")
 		if err != nil {
 			t.Fatalf("round %d failed: %v", r, err)
 		}
@@ -218,7 +218,7 @@ func TestMatch_BestOf7_SuddenDeath(t *testing.T) {
 	}
 
 	// Round 8: Sudden death resolution
-	res, err := match.PlayRound(StanceStrike, StanceFeint, "Finishing move", "Nooo")
+	res, err := match.PlayRound(StanceRock, StanceScissors, "Finishing move", "Nooo")
 	if err != nil {
 		t.Fatalf("round 8 failed: %v", err)
 	}
@@ -273,48 +273,18 @@ func TestBanterSanitization(t *testing.T) {
 	})
 }
 
-func TestHouseRegularBots(t *testing.T) {
-	blinky := NewBlinky()
-	rusty := NewRusty()
-	deacon := NewDeacon()
-
-	if blinky.Name() != HouseBotBlinky {
-		t.Errorf("blinky name mismatch: %s", blinky.Name())
+func TestWeightedHouseStance(t *testing.T) {
+	rock := NewWeighted("Rock", 100, 0, 0, 1)
+	paper := NewWeighted("Paper", 0, 100, 0, 1)
+	scissors := NewWeighted("Scissors", 0, 0, 100, 1)
+	history := []Round{{P1Stance: StanceRock, P2Stance: StancePaper}}
+	if rock.Name() != "Rock" || rock.SelectStance(nil, Player2) != StanceRock || rock.SelectStance(history, Player2) != StanceRock {
+		t.Fatalf("rock policy")
 	}
-	if rusty.Name() != HouseBotRusty {
-		t.Errorf("rusty name mismatch: %s", rusty.Name())
+	if paper.SelectStance(history, Player2) != StancePaper {
+		t.Fatal("paper policy")
 	}
-	if deacon.Name() != HouseBotDeacon {
-		t.Errorf("deacon name mismatch: %s", deacon.Name())
-	}
-
-	// Rusty tests
-	st1 := rusty.SelectStance(nil, Player2)
-	if st1 != StanceStrike {
-		t.Errorf("Rusty r1 expected Strike, got %v", st1)
-	}
-
-	// Deacon tests
-	dt1 := deacon.SelectStance(nil, Player2)
-	if dt1 != StanceParry {
-		t.Errorf("Deacon r1 expected Parry, got %v", dt1)
-	}
-
-	// Blinky adaptive counter:
-	// Feed Blinky history where opponent consistently strikes
-	history := []Round{
-		{P1Stance: StanceStrike, P2Stance: StanceStrike},
-		{P1Stance: StanceStrike, P2Stance: StanceStrike},
-	}
-	// Blinky is P2, opponent is P1 who played Strike both times. Parry beats Strike!
-	bst := blinky.SelectStance(history, Player2)
-	if bst != StanceParry {
-		t.Errorf("Blinky expected to counter Strike with Parry, got %v", bst)
-	}
-
-	// Check canned banter does not exceed 140 chars
-	bBanter := blinky.SelectBanter(history, Player2)
-	if len(bBanter) > 140 {
-		t.Errorf("Blinky banter exceeds 140 chars: %s", bBanter)
+	if scissors.SelectStance(nil, Player1) != StanceScissors {
+		t.Fatal("scissors policy")
 	}
 }

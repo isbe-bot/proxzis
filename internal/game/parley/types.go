@@ -9,10 +9,10 @@ import (
 type Stance string
 
 const (
-	StanceNone   Stance = ""
-	StanceStrike Stance = "strike"
-	StanceParry  Stance = "parry"
-	StanceFeint  Stance = "feint"
+	StanceNone     Stance = ""
+	StanceRock     Stance = "rock"
+	StancePaper    Stance = "paper"
+	StanceScissors Stance = "scissors"
 )
 
 var (
@@ -32,12 +32,12 @@ var (
 // ParseStance parses a string into a validated Stance.
 func ParseStance(s string) (Stance, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "strike":
-		return StanceStrike, nil
-	case "parry":
-		return StanceParry, nil
-	case "feint":
-		return StanceFeint, nil
+	case "rock":
+		return StanceRock, nil
+	case "paper":
+		return StancePaper, nil
+	case "scissors":
+		return StanceScissors, nil
 	default:
 		return StanceNone, ErrInvalidStance
 	}
@@ -45,7 +45,7 @@ func ParseStance(s string) (Stance, error) {
 
 // IsValid checks whether a stance is recognized and valid.
 func (s Stance) IsValid() bool {
-	return s == StanceStrike || s == StanceParry || s == StanceFeint
+	return s == StanceRock || s == StancePaper || s == StanceScissors
 }
 
 // ModifierCard represents environmental rule modifiers (max 1 active).
@@ -54,8 +54,8 @@ type ModifierCard string
 const (
 	ModifierNone             ModifierCard = ""
 	ModifierMirrorTiePenalty ModifierCard = "MirrorTiePenalty"
-	ModifierFeintSurge       ModifierCard = "FeintSurge"
-	ModifierParryRebound     ModifierCard = "ParryRebound"
+	ModifierScissorsSurge    ModifierCard = "ScissorsSurge"
+	ModifierPaperRebound     ModifierCard = "PaperRebound"
 )
 
 // ParseModifierCard validates and parses a modifier card string.
@@ -66,10 +66,10 @@ func ParseModifierCard(s string) (ModifierCard, error) {
 		return ModifierNone, nil
 	case "MirrorTiePenalty", "mirror_tie_penalty", "mirror-tie-penalty":
 		return ModifierMirrorTiePenalty, nil
-	case "FeintSurge", "feint_surge", "feint-surge":
-		return ModifierFeintSurge, nil
-	case "ParryRebound", "parry_rebound", "parry-rebound":
-		return ModifierParryRebound, nil
+	case "ScissorsSurge", "scissors_surge", "scissors-surge":
+		return ModifierScissorsSurge, nil
+	case "PaperRebound", "paper_rebound", "paper-rebound":
+		return ModifierPaperRebound, nil
 	default:
 		return ModifierNone, ErrInvalidModifier
 	}
@@ -91,17 +91,17 @@ func (m ModifierCard) Info() ModifierCardInfo {
 			Name:        "Mirror Tie Penalty",
 			Description: "Stance ties penalize both contestants 1 marble into the house pot.",
 		}
-	case ModifierFeintSurge:
+	case ModifierScissorsSurge:
 		return ModifierCardInfo{
 			Card:        m,
-			Name:        "Feint Surge",
-			Description: "Successful Feint awards +2 points instead of +1.",
+			Name:        "Scissors Surge",
+			Description: "A round won with Scissors awards +2 points instead of +1.",
 		}
-	case ModifierParryRebound:
+	case ModifierPaperRebound:
 		return ModifierCardInfo{
 			Card:        m,
-			Name:        "Parry Rebound",
-			Description: "Successful Parry immediately reveals opponent's prior stance history.",
+			Name:        "Paper Rebound",
+			Description: "A round won with Paper immediately reveals the opponent's prior stance history.",
 		}
 	default:
 		return ModifierCardInfo{
@@ -114,5 +114,5 @@ func (m ModifierCard) Info() ModifierCardInfo {
 
 // IsValid reports whether the card is supported, including standard play.
 func (m ModifierCard) IsValid() bool {
-	return m == ModifierNone || m == ModifierMirrorTiePenalty || m == ModifierFeintSurge || m == ModifierParryRebound
+	return m == ModifierNone || m == ModifierMirrorTiePenalty || m == ModifierScissorsSurge || m == ModifierPaperRebound
 }

@@ -335,8 +335,7 @@ func (s *Server) playTurn(ctx context.Context, bot matchmaker.BotInfo, req TurnR
 	if session.HouseBot != nil && session.Engine.Status != parley.StatusCompleted {
 		houseRole := parley.Player2
 		houseStance := session.HouseBot.SelectStance(session.Engine.Rounds, houseRole)
-		houseBanter := session.HouseBot.SelectBanter(session.Engine.Rounds, houseRole)
-		_ = session.Engine.CommitTurn(houseRole, houseStance, houseBanter, 0)
+		_ = session.Engine.CommitTurn(houseRole, houseStance, "", 0)
 	}
 
 	roundResolved := session.Engine.IsRoundResolved()
@@ -556,7 +555,7 @@ func (s *Server) buildEnvelope(session *matchmaker.MatchSession, callerID uuid.U
 			IsHouse: oppBot.IsHouse,
 		},
 		OpponentBanter: oppBanter,
-		ValidActions:   []string{"strike", "parry", "feint"},
+		ValidActions:   []string{"rock", "paper", "scissors"},
 		Status:         string(session.Engine.Status),
 		Winner:         winnerStr,
 		TimeoutSeconds: 30,

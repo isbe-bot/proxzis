@@ -14,7 +14,7 @@ func TestGenerateMatchesSpectatorArchive(t *testing.T) {
 	if first.ID != "AR-1048" || first.A.ID != "sovereign" || first.B.ID != "blinky" || first.Stake != 20 || first.Winner != "b" || first.Date != "2026-10-20T12:12:00.000Z" {
 		t.Fatalf("first match %+v", first)
 	}
-	if first.Score != (Score{1, 2}) || first.Rounds[0].A != "feint" || first.Rounds[0].B != "strike" {
+	if first.Score != (Score{1, 2}) || first.Rounds[0].A != "scissors" || first.Rounds[0].B != "rock" {
 		t.Fatalf("first round %+v score %+v", first.Rounds[0], first.Score)
 	}
 	if first.Headline != "Blinky finds the edge." || first.Highlights[0] != "A 1–2 finish, built one read at a time." {
@@ -85,7 +85,7 @@ func assertArchiveReads(t *testing.T, store Store) {
 		t.Fatal(found, err)
 	}
 	bot, err := store.GetBot(ctx, "moth")
-	if err != nil || !bot.House || bot.Facts.Played != 8 {
+	if err != nil || bot.House || bot.Facts.Played != 8 {
 		t.Fatalf("%+v %v", bot, err)
 	}
 	if _, err := store.GetMatch(ctx, "missing"); err != ErrNotFound {
@@ -106,8 +106,12 @@ func assertArchiveReads(t *testing.T, store Store) {
 		t.Fatalf("duplicate email: %v", err)
 	}
 	house, err := store.ListBots(ctx, BotQuery{Role: "house", Limit: 10})
-	if err != nil || house.Total != 4 {
+	if err != nil || house.Total != 10 {
 		t.Fatalf("%+v %v", house, err)
+	}
+	resident, err := store.GetBot(ctx, "the-tall-whites")
+	if err != nil || !resident.House || resident.Facts.Played != 0 || resident.Tactics[0] != 25 || resident.Tactics[1] != 40 || resident.Tactics[2] != 35 {
+		t.Fatalf("%+v %v", resident, err)
 	}
 	named, err := store.ListBots(ctx, BotQuery{Q: "mirror", Limit: 10})
 	if err != nil || named.Total != 1 || named.Items.([]Bot)[0].ID != "moth" {

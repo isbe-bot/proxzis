@@ -36,7 +36,7 @@ func TestModerator_BanterChecks(t *testing.T) {
 	}
 
 	// 4. Repeated infractions trigger sent home
-	res = m.CheckBanter(botID, "fuck this parry")
+	res = m.CheckBanter(botID, "fuck this paper")
 	if res.Verdict != VerdictWithheld {
 		t.Fatalf("expected withheld for crude language, got: %s", res.Verdict)
 	}

@@ -35,7 +35,7 @@ func TestCatalogListSearchPageLookupAndCreate(t *testing.T) {
 	if err := json.Unmarshal(bots.Body.Bytes(), &botPage); err != nil {
 		t.Fatal(err)
 	}
-	if botPage.Total != 4 || botPage.Page != 2 || botPage.Offset != 2 || len(botPage.Items) != 2 {
+	if botPage.Total != 8 || botPage.Page != 2 || botPage.Offset != 2 || len(botPage.Items) != 2 {
 		t.Fatalf("%+v", botPage)
 	}
 

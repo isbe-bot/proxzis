@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"time"
 
 	"github.com/isbe-bot/bottagon/internal/catalog"
 	"github.com/isbe-bot/bottagon/internal/config"
+	"github.com/isbe-bot/bottagon/internal/house"
 )
 
 func main() {
@@ -22,7 +24,10 @@ func main() {
 		log.Fatal(err)
 	}
 	if catalog.PostgresURL(cfg.DatabaseURL) {
-		log.Print("spectator archive seeded in postgres")
+		if err := house.SeedLedger(ctx, closer.(*sql.DB)); err != nil {
+			log.Fatal(err)
+		}
+		log.Print("spectator archive and house ledger seeded in postgres")
 		return
 	}
 	log.Printf("spectator archive seeded in %s", cfg.DatabasePath)

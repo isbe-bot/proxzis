@@ -13,6 +13,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+
+	"github.com/isbe-bot/bottagon/internal/house"
 )
 
 const (
@@ -196,13 +198,22 @@ var (
 		"admin": {}, "administrator": {}, "system": {}, "bottagon": {}, "refbot": {}, "house": {},
 		"deacon": {}, "rusty": {}, "blinky": {}, "moth": {}, "sovereign": {}, "nyx": {}, "echo": {}, "grok": {},
 	}
+)
+
+func init() {
+	for _, agent := range house.Agents() {
+		reservedNames[strings.ToLower(agent.Name)] = struct{}{}
+	}
+}
+
+var (
 	namePattern  = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N} _-]*$`)
 	emailPattern = regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$`)
 )
 
 const (
-	msgNameTaken  = "A bot with this name is already registered."
-	msgEmailTaken = "This email is already associated with an active bot."
+	msgNameTaken  = "An agent with this name is already registered."
+	msgEmailTaken = "This email is already associated with an active agent."
 )
 
 func ValidateCreate(in CreateBot) (CreateBot, *ValidationError) {
@@ -212,9 +223,9 @@ func ValidateCreate(in CreateBot) (CreateBot, *ValidationError) {
 	errs := FieldErrors{}
 	switch {
 	case name == "":
-		errs["name"] = "Bot name is required."
+		errs["name"] = "Agent name is required."
 	case utf8.RuneCountInString(name) < 3 || utf8.RuneCountInString(name) > 24:
-		errs["name"] = "Bot name must be between 3 and 24 characters."
+		errs["name"] = "Agent name must be between 3 and 24 characters."
 	case !namePattern.MatchString(name):
 		errs["name"] = "Must start with a letter/number and use letters, numbers, spaces, _ or -."
 	case reserved(name):
@@ -230,7 +241,7 @@ func ValidateCreate(in CreateBot) (CreateBot, *ValidationError) {
 	}
 	switch {
 	case persona == "":
-		errs["persona"] = "Bot persona description is required."
+		errs["persona"] = "Agent persona description is required."
 	case utf8.RuneCountInString(persona) < 12 || utf8.RuneCountInString(persona) > 180:
 		errs["persona"] = "Persona description must be between 12 and 180 characters."
 	}

@@ -15,15 +15,15 @@ func TestSpectatorContractMatchesEngine(t *testing.T) {
 	root := moduleRoot(t)
 	arena := string(mustRead(t, filepath.Join(root, "web", "src", "utils", "arena.js")))
 	store := string(mustRead(t, filepath.Join(root, "internal", "catalog", "sqlstore.go")))
-	app := string(mustRead(t, filepath.Join(root, "web", "src", "App.vue")))
+	app := string(mustRead(t, filepath.Join(root, "web", "src", "views", "HomeView.vue")))
 	var problems []string
-	for _, needle := range []string{"strike: 'feint'", "feint: 'parry'", "parry: 'strike'"} {
+	for _, needle := range []string{"rock: 'scissors'", "scissors: 'paper'", "paper: 'rock'"} {
 		if !strings.Contains(arena, needle) {
 			problems = append(problems, "arena.js BEATS is not the engine matrix; missing "+needle)
 		}
 	}
-	if !strings.Contains(app, "Strike <span>beats Feint</span>") {
-		problems = append(problems, "overview does not say Strike beats Feint")
+	if !strings.Contains(app, "Rock <span>beats Scissors</span>") {
+		problems = append(problems, "overview does not say Rock beats Scissors")
 	}
 	if !strings.Contains(app, "not the live pass-line ledger") {
 		problems = append(problems, "overview does not say the archive is separate from the live ledger")

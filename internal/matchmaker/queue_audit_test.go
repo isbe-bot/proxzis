@@ -174,10 +174,10 @@ func TestQueueEngineUsesBoundedDemoPurse(t *testing.T) {
 	}
 	session.Mu.Lock()
 	defer session.Mu.Unlock()
-	if err := session.Engine.CommitTurn(parley.Player1, parley.StanceStrike, "", DemoPurse+1); !errors.Is(err, parley.ErrExcessiveWager) {
+	if err := session.Engine.CommitTurn(parley.Player1, parley.StanceRock, "", DemoPurse+1); !errors.Is(err, parley.ErrExcessiveWager) {
 		t.Fatalf("unfunded wager: %v", err)
 	}
-	if err := session.Engine.CommitTurn(parley.Player1, parley.StanceStrike, "", 1); err != nil {
+	if err := session.Engine.CommitTurn(parley.Player1, parley.StanceRock, "", 1); err != nil {
 		t.Fatalf("legal wager: %v", err)
 	}
 }

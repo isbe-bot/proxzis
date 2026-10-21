@@ -92,7 +92,7 @@ func (a *MCPAdapter) buildMCPServerForRequest(bot matchmaker.BotInfo, requestCtx
 	// Tool: play_turn
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "play_turn",
-		Description: "Commit your stance (strike, parry, or feint), side bet, and optional banter for the current Parley round.",
+		Description: "Commit your stance (rock, paper, or scissors), side bet, and optional banter for the current Parley round.",
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args PlayTurnArgs) (*mcp.CallToolResult, any, error) {
 		ctx, cancel := originatingContext(ctx, requestCtx)
 		defer cancel()
